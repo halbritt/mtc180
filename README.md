@@ -30,27 +30,34 @@ All factory trigger parts (bait pedal/"catch", hold-down bar, and rear staple) a
 - `cad/carrier_positivelock.star` — Parametric `MTC-180L-PL` v3.1 carrier solid (`arm_radius`, `trap_pitch`, `wire_half_cc`) with integrated distal sear D-loop.
 - `cad/trigger_mechanism.star` & `cad/print_trigger.star` — Zero-support 3-part Wood-Board Front Coaxial Sear + Rear Pull-String Fairlead kit (`22.96 cm³` CAD / `~17 g` PETG).
 - `cad/print_positivelock.star` — Full-carrier export & Bambu Lab H2S `0.4` / `0.6 TC` / `0.8 TC` printability test.
-- `cad/installed_positivelock.star` — 6-pose `180°` sweep clearance test against 3 exact bails, sloped wood bases, `240 × 204 mm` trajectory board, front coaxial sear, rear fairlead, and pull string.
-- `cad/crossbar_coupon.star` — Fast `40.5 × 146.5 × 8.2 mm` (`X = 19.5..60.0 mm`) 1:1 bail-fit verification coupon (`~7–9 min` extrude on `.6/.8 TC`).
+- `cad/installed_positivelock.star` — 9-pose `180°` sweep + trigger actuation + ball flight clearance & animation model.
+- `cad/crossbar_coupon.star` — Fast `40.5 × 146.5 × 8.2 mm` (`X = 19.5..60.0 mm`) 1:1 bail-fit verification coupon (physically test-fit verified on traps).
 - `cad/m3_clamp_bars.star` — Optional 4-piece printed M3 wire clamp bars.
 - `fea/` — Deterministic STL-to-`C3D8I` brick mesher and CalculiX 2.23 two-phase FDM (`PETG_SHELL` + `PETG_GYROID15`) 4-step solver.
-- `exports/` — Ready-to-slice Bambu H2S `.3mf`, `.stl`, and dimensioned A3 `.pdf` / `.svg` drawings.
+- `exports/` — Ready-to-slice Bambu H2S `.3mf`, `.stl`, animated `.gif`, and dimensioned A3 `.pdf` / `.svg` drawings.
 - `docs/` — Detailed design notes, ballistics table, and renders.
 
 ## Verification & Export Commands
 
 ```sh
-mise trust && mise run test     # Run all Cadpole printability + 180-deg clearance checks
+mise trust && mise run test     # Run all Cadpole printability + 9-pose clearance checks
 mise run export                 # Rebuild exports/*.stl, *.3mf, *.pdf, *.svg
+mise run animate                # Rebuild 64-frame full-mechanism + ball launch animated GIF
 mise run fea                    # Run CalculiX 2.23 C3D8I two-phase FDM stress & inertia study
 ```
 
 ## Bambu Lab H2S Print Settings (PETG, Supports OFF, Arachne ON, 15% Gyroid)
 
-Add a height-range modifier at `Z = 18.0..32.0 mm` (`3` walls on `.6/.8 TC`, `5` walls on `.4 HF`) so the `2.65 mm` compliant ball-retention petals print solid:
+Add a height-range modifier at `Z = 18.0..32.0 mm` (`3` walls on `.6/.8 TC`, `5` walls on `.4 HF`) on the full carrier so the `2.65 mm` compliant ball-retention petals print solid:
 
 | Part | Recommended Nozzle | Layer × Width | PETG Mass | Extrusion Time |
 | --- | --- | --- | --- | --- |
 | **Crossbar Fit Coupon** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~16–18 g` | `~7–9 min` |
-| **Full Carrier (`MTC-180L-PL`)** | `0.6 mm` TC (Sprint) | `0.40 × 0.88 mm` (`2` / `3` walls) | `43.3 g` | `19.1 min` |
-| **Full Carrier (`MTC-180L-PL`)** | `0.4 mm` HF | `0.28 × 0.56 mm` (`3` / `5` walls) | `43.0 g` | `23.3 min` |
+| **3-Part Trigger Kit** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~17 g` | `~9 min` |
+| **Full Carrier (`MTC-180L-PL` v3.1)** | `0.6 mm` TC (Sprint) | `0.40 × 0.88 mm` (`2` / `3` walls) | `~45 g` | `~20 min` |
+| **Full Carrier (`MTC-180L-PL` v3.1)** | `0.4 mm` HF | `0.28 × 0.56 mm` (`3` / `5` walls) | `~45 g` | `~24 min` |
+
+## Hardware / Fastener Notes (M4 vs. M3)
+
+- **Trigger Kit (`mtc180_trigger_kit`) — Uses M4 Hardware Directly:** `2×` `M4 × 35 mm` bolts/pins for the two coaxial clevis pivots (`Ø4.1–4.2 mm` teardrop bores), `6×` `M4` or `#6` wood screws (`Ø4.1 mm` mounting holes) into the `240 × 204 × 12–19 mm` wood trajectory board, `1×` `#19`/`#32` rubber band for auto-click return, and braided nylon/Dacron pull cord.
+- **Carrier Rear Bail Clamps (`X = 24.2 mm`) — Use Low-Profile M3 (`M3 × 6 mm`):** At `X = 24.2 mm`, the `3.37°`-sloped mousetrap wood sits at `Z = 5.12 mm` (`1.17 mm` above the `Ø1.8 mm` wire and `0.44 mm` above the `4.68 mm` jaw) on `6.71 mm`-wide finger lands, so `M4` heads hit the wood early; use `6×` ultra-low/wafer-head `M3 × 6 mm` screws or `90°` countersunk flat-head `M3 × 6 mm` screws from the flush `Z = 0` countersinks.

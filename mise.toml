@@ -17,6 +17,14 @@ cadpole export --run-exports --out-dir exports cad/crossbar_coupon.star
 cadpole export --run-exports --out-dir exports cad/m3_clamp_bars.star
 """
 
+[tasks.animate]
+description = "Render and tight-crop the 64-frame full-mechanism + trigger + ball launch animated GIF"
+run = """
+mkdir -p exports docs/images
+cadpole animate cad/installed_positivelock.star --frames 64 --size 1080x780 --view product --lighting product --backdrop studio --no-grid -o exports/mtc180_full_mechanism_launch.gif
+uv run --with pillow --with numpy python3 scripts/crop_gif.py exports/mtc180_full_mechanism_launch.gif docs/images/mtc180_full_mechanism_launch.gif
+"""
+
 [tasks.fea]
 description = "Run CalculiX 2.23 C3D8I two-phase FDM PETG (solid shell + 15% gyroid) 4-step FEA"
 run = "uv run --with numpy --with scipy --with trimesh python3 fea/run_positivelock_fea.py"
