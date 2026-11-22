@@ -2,7 +2,7 @@
 
 ![Complete MTC-180 Launch Sequence (Rear Pull-String -> Front Coaxial Sear -> 180° Sweep -> Golf Ball Trajectory)](docs/images/mtc180_full_mechanism_launch.gif)
 
-Parametric [Cadpole](https://github.com/halbritt/cadpole) CAD and [CalculiX 2.23](http://www.dhondt.de/) `C3D8I` two-phase FDM PETG finite-element model for a single 3D-printed carrier that attaches directly to three stripped mousetrap U-bails (torsion springs + U-bails only; factory bait pedals and trigger hold-down wires removed) and carries a regulation golf ball (`Ø42.67 mm`, `45.93 g`) through the full `180°` sweep. Launch angle is set by tilting the mousetrap mounting plane ($\gamma_{\text{launch}} = 90^\circ - \beta_{\text{horiz}}$).
+Parametric [Cadpole](https://github.com/halbritt/cadpole) CAD and [CalculiX 2.23](http://www.dhondt.de/) `C3D8I` two-phase FDM PETG finite-element model for a single 3D-printed carrier that attaches directly to three stripped mousetrap U-bails (torsion springs + U-bails only; factory bait pedals and trigger hold-down wires removed) and carries a regulation golf ball (`Ø42.67 mm`, `45.93 g`) from parallel-cocked (`+180°`) to snapped-shut (`-3.37°` against the flat wood bases, `183.37°` total sweep). Mousetrap bases mount dead flat (`0.00°`) to the adjustable trajectory board ($\gamma_{\text{launch}} = 93.37^\circ - \beta_{\text{horiz}}$).
 
 ## Caliper-Measured Hardware Inputs
 
