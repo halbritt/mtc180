@@ -17,4 +17,4 @@ cadpole export --run-exports --out-dir exports cad/m3_clamp_bars.star
 
 [tasks.fea]
 description = "Run CalculiX 2.23 C3D8I two-phase FDM PETG (solid shell + 15% gyroid) 4-step FEA"
-run = "python3 fea/run_positivelock_fea.py"
+run = "uv run --with numpy --with scipy --with trimesh python3 fea/run_positivelock_fea.py"
