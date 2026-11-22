@@ -13,26 +13,32 @@ Parametric [Cadpole](https://github.com/halbritt/cadpole) CAD and [CalculiX 2.23
 | U-bail width (OD) | `40.50 mm` outside-to-outside | **`38.70 mm` center-to-center** (`WIRE_HALF_CC = 19.35 mm`) |
 | U-bail length | `43.20 mm` axle to inside of front wire | Front wire spans `X = 43.20..45.00 mm` (`44.10 mm` centerline) |
 
-## Positive-Lock Bail Attachment (No Factory Trigger, No Zip-Ties)
+## Bail Attachment (v4: wires bear on the driven side)
 
-All factory trigger parts (bait pedal/"catch", hold-down bar, and rear staple) are stripped off, keeping only the torsion springs and U-bails:
+All factory trigger parts (bait pedal/"catch", hold-down bar, and rear staple) are stripped off, keeping only the torsion springs and U-bails. The carrier's `+Z` face leads the swing, so the springs push the wires toward `+Z`. In v4 the wire seats open on the trailing bed face (`Z = 0`) and close with a solid 45° V roof, so drive torque goes straight into the `6.2 mm` plate. The snap lips and screws only keep the wires seated.
 
-1. **Front Bail-Retainer Slot & Web (`X = 36.2..47.3 mm`):** Behind the front nose bar (`X > 47.3 mm`), each bail station has a `5.0 mm` through-slot (`X = 42.3..47.3 mm`) ahead of a `6.1 mm` plastic retainer web (`X = 36.2..42.3 mm`). Threading the U-bail's front transverse wire (`X = 43.2..45.0 mm`) down through the slot places the wire under the nose bar while the plastic web sits inside the closed U-bail loop, interlocking the steel bail and printed arm like two chain links.
-2. **Side-Wire C-Jaws (`X = 18.5..28.8 mm`):** Six `38.70 mm` C-to-C snap jaws click over the straight `Ø1.80 mm` side wires.
-3. **Rear M3 Lock (`X = 24.2 mm`):** Six inboard `Ø2.66 mm` self-tapping M3 bosses (`Y = ±15.0, ±31.15, ±61.15 mm`) accept `M3 × 6–8 mm` screws + washers (or flat-head screws from `Z = 0` into `exports/m3_wire_clamp_bars.stl`).
+1. **Blind Crossbar Pockets (`X = 42.3..47.3 mm`):** Each front transverse wire (`X = 43.2..45.0 mm`) sits in a blind pocket with a `2.2 mm` roof. The `6.1 mm` web (`X = 36.2..42.3 mm`) sits inside the closed U-bail and takes the radial load.
+2. **Side-Wire Snap Seats (`X = 19.5..28.8 mm`):** Six `38.70 mm` C-to-C seats. Each wire enters from the trailing face, passes the `1.44 mm` throat at `Z = 2.38 mm` and seats at `Z = 3.05 mm` (same plane as v3, so the sear and D-loop geometry are unchanged).
+3. **Recessed M3 Washer Locks (`X = 25.8 mm`):** Six `2.05 mm`-deep pockets on the trailing face (`Y = ±15.0, ±31.15, ±61.15 mm`) take an `M3 × 6 mm` wafer or ultra-low-head screw (head `≤ 1.0 mm`) and a `9 × 0.8 mm` M3 fender washer, driven into a `2.5 mm` square self-tapping pilot. The washer laps `1.05 mm` under the wire and sits `0.10 mm` below it, so a seated wire cannot come back out. Head and washer end `0.25 mm` below the face, which matters because the cocked carrier is only `0.45 mm` off the trap wood. Over each pocket the washer replaces the near-side snap lip.
+
+**Assembly order changed:** the carrier now goes on from the front of the bails. Lay the carrier trailing-face-up, lift each bail a few degrees, press its wires into the seats (the spring preload holds them there), fit the six washers, then screw the three trap bases to the board.
+
+**Refit the coupon before printing the full arm.** The plan dimensions of the seats are the ones the v3 coupon verified, but the wires now enter from the opposite face, so `exports/mtc180_crossbar_fit_coupon*` needs one more print and a loaded test: snap it on, then pull the coupon against the springs by hand.
+
 4. **Wood-Board Front Coaxial Sear + Rear Pull-String Trigger (`cad/trigger_mechanism.star`):**
-   - **Recommended Trajectory Board:** `240 mm` long × `204 mm` wide × `12–19 mm` thick wood (`x_L = -190..+50 mm`), with the three stripped mousetrap bases screwed side-by-side at `x_L = -49.2..+49.2 mm` (flush with the rear `+50 mm` board edge so the `0°` released cup clears the back of the board).
+   - **Recommended Trajectory Board:** `300 mm` long × `204 mm` wide × `12–19 mm` thick wood (`x_L = -190..+110 mm`), with the three stripped mousetrap bases screwed side-by-side at `x_L = -49.2..+49.2 mm`. The cup passes behind the `+110 mm` rear edge.
+   - **Padded Stop Block (`x_L ≈ 98..110 mm`, `|Y| ≤ 33 mm`):** A wood riser plus `3 mm` rubber pad on the board extension, about `8.5 mm` tall in total, with its top face tilted `5°` to match the arm. It catches the three truss ribs at `X = 104 mm`, close to the arm's centre of percussion (`≈109 mm`), and stops the arm `5°` before the front wires reach the flat trap wood (bail `+1.63°` from the board plane instead of `-3.37°`). That keeps the full stroke apart from the last `5°` (a percent or two of the energy) and keeps the stop shock out of the bails, staples and seats. `launch_deg` in `cad/installed_positivelock.star` is the true launch elevation at this stop.
+   - **Safety-Pin Yoke:** The sear bridge now carries two posts that straddle the cocked D-loop tongue. Slide a `4 mm` pin (bolt or nail) through both posts before loading the ball; it passes `0.5 mm` over the tongue and holds the arm even if the sear lets go. Pull it out sideways as the last step before pulling the string.
    - **Front Self-Cocking Sear (`x_L = -177.2 mm`, `Y = 0`):** Screws to the underside of the wood board (`z_L = -11.5 mm`) and hooks the carrier's distal D-loop (`X_p = 175.5..180.5 mm`, `R = 177 mm` lever arm → only `12.3 N` hold load for all 3 springs combined). Contact sits `0.35 mm` over-center against a forward positive stop so vibration cannot trip it, while a `42°` bottom cam ramp clicks shut automatically when cocking the arm by hand.
    - **Outboard Pull-String Corridor (`Y = +83.0 mm`):** A rigid `94.4 mm` coaxial PETG rocker shaft (`0.04 mm` twist under load) transfers motion outboard to `Y = +83.0 mm` (`9.75 mm` clear of the `±73.25 mm` carrier and `13.85 mm` clear of the mousetrap pack), where a `22.0 mm` lever arm (`2.5:1` mechanical advantage → **`1.8 N` / `0.41 lbf` string pull**) connects straight back under the board to the rear fairlead (`x_L = +38 mm, Y = +83 mm`) with zero pulleys and zero holes through the wood board.
 
 ## Repository Layout
 
-- `cad/carrier_positivelock.star` — Parametric `MTC-180L-PL` v3.1 carrier solid (`arm_radius`, `trap_pitch`, `wire_half_cc`) with integrated distal sear D-loop.
+- `cad/carrier_positivelock.star` — Parametric `MTC-180L-PL` v4 carrier solid (`arm_radius`, `trap_pitch`, `wire_half_cc`) with driven-side wire seats, cup backstop wall and integrated distal sear D-loop.
 - `cad/trigger_mechanism.star` & `cad/print_trigger.star` — Zero-support 3-part Wood-Board Front Coaxial Sear + Rear Pull-String Fairlead kit (`22.96 cm³` CAD / `~17 g` PETG).
-- `cad/print_positivelock.star` — Full-carrier export & Bambu Lab H2S `0.4` / `0.6 TC` / `0.8 TC` printability test.
-- `cad/installed_positivelock.star` — 9-pose `180°` sweep + trigger actuation + ball flight clearance & animation model.
-- `cad/crossbar_coupon.star` — Fast `40.5 × 146.5 × 8.2 mm` (`X = 19.5..60.0 mm`) 1:1 bail-fit verification coupon (physically test-fit verified on traps).
-- `cad/m3_clamp_bars.star` — Optional 4-piece printed M3 wire clamp bars.
+- `cad/print_positivelock.star` — Full-carrier export, Bambu Lab H2S `0.4` / `0.6 TC` / `0.8 TC` printability test, and a load-path test that every wire has solid plate ahead of it.
+- `cad/installed_positivelock.star` — 9-pose sweep (`180°` cocked to the `5°` stop) + trigger actuation + ball flight clearance & animation model, including the stop block, safety pin and washer screws.
+- `cad/crossbar_coupon.star` — Fast `40.5 × 146.5 × 8.2 mm` (`X = 19.5..60.0 mm`) 1:1 bail-fit verification coupon (the v3 seats were test-fit on traps; the v4 seats need a refit, see above).
 - `fea/` — Deterministic STL-to-`C3D8I` brick mesher and CalculiX 2.23 two-phase FDM (`PETG_SHELL` + `PETG_GYROID15`) 4-step solver.
 - `exports/` — Ready-to-slice Bambu H2S `.3mf`, `.stl`, animated `.gif`, and dimensioned A3 `.pdf` / `.svg` drawings.
 - `docs/` — Detailed design notes, ballistics table, and renders.
@@ -46,6 +52,14 @@ mise run animate                # Rebuild 64-frame full-mechanism + ball launch 
 mise run fea                    # Run CalculiX 2.23 C3D8I two-phase FDM stress & inertia study
 ```
 
+## Cup Backstop
+
+The radial (centrifugal) load on the ball reaches about `20 N` late in the swing, far more than the `3.5 N` axial detent. v4 keeps a rigid outboard wall segment (`±33°`, up to `Z = 27 mm`, `4 mm` above the ball equator) with no detent lip, separated from the two compliant side petals by `2.5 mm` slits. The ball leans on that wall during the swing and slides straight out along it at the stop.
+
+## Performance (model, not yet measured)
+
+With the repo's `2.12 J` delivered-energy assumption the v4 carrier (`61.8 g` two-phase FDM mass, `5.82 kg·cm²`) gives `≈7.5 m/s`, against `≈7.6 m/s` for v3.1. That is about `6 m` at the default `42°` launch, twice the `3 m` rubric minimum. The spring energy itself is still an assumption: measure bail force at `0°`, `90°` and `180°` with a luggage scale to pin it down. The FEA stop-shock load case still models the old bail-on-wood stop.
+
 ## Bambu Lab H2S Print Settings (PETG, Supports OFF, Arachne ON, 15% Gyroid)
 
 Add a height-range modifier at `Z = 18.0..32.0 mm` (`3` walls on `.6/.8 TC`, `5` walls on `.4 HF`) on the full carrier so the `2.65 mm` compliant ball-retention petals print solid:
@@ -54,10 +68,10 @@ Add a height-range modifier at `Z = 18.0..32.0 mm` (`3` walls on `.6/.8 TC`, `5`
 | --- | --- | --- | --- | --- |
 | **Crossbar Fit Coupon** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~16–18 g` | `~7–9 min` |
 | **3-Part Trigger Kit** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~17 g` | `~9 min` |
-| **Full Carrier (`MTC-180L-PL` v3.1)** | `0.6 mm` TC (Sprint) | `0.40 × 0.88 mm` (`2` / `3` walls) | `~45 g` | `~20 min` |
-| **Full Carrier (`MTC-180L-PL` v3.1)** | `0.4 mm` HF | `0.28 × 0.56 mm` (`3` / `5` walls) | `~45 g` | `~24 min` |
+| **Full Carrier (`MTC-180L-PL` v4)** | `0.6 mm` TC (Sprint) | `0.40 × 0.88 mm` (`2` / `3` walls) | re-slice (v4 CAD volume is `17 %` above v3.1's `~45 g`) | re-slice |
+| **Full Carrier (`MTC-180L-PL` v4)** | `0.4 mm` HF | `0.28 × 0.56 mm` (`3` / `5` walls) | re-slice | re-slice |
 
 ## Hardware / Fastener Notes (M4 vs. M3)
 
-- **Trigger Kit (`mtc180_trigger_kit`) — Uses M4 Hardware Directly:** `2×` `M4 × 35 mm` bolts/pins for the two coaxial clevis pivots (`Ø4.1–4.2 mm` teardrop bores), `6×` `M4` or `#6` wood screws (`Ø4.1 mm` mounting holes) into the `240 × 204 × 12–19 mm` wood trajectory board, `1×` `#19`/`#32` rubber band for auto-click return, and braided nylon/Dacron pull cord.
-- **Carrier Rear Bail Clamps (`X = 24.2 mm`) — Use Low-Profile M3 (`M3 × 6 mm`):** At `X = 24.2 mm`, the `3.37°`-sloped mousetrap wood sits at `Z = 5.12 mm` (`1.17 mm` above the `Ø1.8 mm` wire and `0.44 mm` above the `4.68 mm` jaw) on `6.71 mm`-wide finger lands, so `M4` heads hit the wood early; use `6×` ultra-low/wafer-head `M3 × 6 mm` screws or `90°` countersunk flat-head `M3 × 6 mm` screws from the flush `Z = 0` countersinks.
+- **Trigger Kit (`mtc180_trigger_kit`) — Uses M4 Hardware Directly:** `2×` `M4 × 35 mm` bolts/pins for the two coaxial clevis pivots (`Ø4.1–4.2 mm` teardrop bores), `1×` `M4 × 50 mm` bolt or `Ø4 mm` nail as the safety pin, `6×` `M4` or `#6` wood screws (`Ø4.1 mm` mounting holes) into the `300 × 204 × 12–19 mm` wood trajectory board, `1×` `#19`/`#32` rubber band for auto-click return, and braided nylon/Dacron pull cord.
+- **Carrier Washer Locks (`X = 25.8 mm`) — `6×` `M3 × 6 mm` wafer / ultra-low-head screws (head `≤ 1.0 mm`) + `6×` `9 × 0.8 mm` M3 fender washers:** They sit fully recessed in pockets on the trailing face and only retain the wires. A standard button head (`1.65 mm`) would stand proud and touch the trap wood at full cock. The first turn of each screw cuts through a one-layer bridging step at the pocket roof. Stop when the washer seats; these are self-tapped PETG threads.

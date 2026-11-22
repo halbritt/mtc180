@@ -1,3 +1,5 @@
+> **v4 note (2026-11-22):** the sections below were written for earlier carrier revisions. The current geometry — driven-side wire seats, recessed washer locks, cup backstop wall, stop block and safety-pin yoke — is described in the top-level `README.md`. Figures quoted below for mass, exit speed and stop shock predate v4.
+
 # MTC-180L-PL Caliper-Exact FEA-Optimized PETG 3-Mousetrap Carrier (38.70 mm C-to-C × 43.2 mm Bail, Bambu H2S)
 
 ## Printable Part & Interactive 3D Deliverables (`MTC-180L-PL` Caliper-Exact Positive-Lock PETG)

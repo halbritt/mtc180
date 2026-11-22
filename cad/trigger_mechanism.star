@@ -5,6 +5,8 @@
 #   - rear_string_guide   : screws near rear edge of board (x_L = +38 mm, Y = +83 mm), guides pull string out the back
 
 Y_PULL = 83.0
+SAFETY_X = 13.25   # Safety-pin axis, bridge-local x (toward the hinge from the sear pivot)
+SAFETY_Z = 15.75   # Safety-pin axis height above the mounting face (tongue top is at 13.25)
 
 
 def _teardrop_xz(sk, cx, cz, r, roof_dir=1.0):
@@ -41,7 +43,15 @@ def build_trigger_parts(prefix="trig"):
     # Cut M4 teardrop pivot bores only through the two clevises so screw plates stay full 3.4 mm thick
     b1 = extrude(_teardrop_xz(sketch(XZ.offset(-14.5), name=prefix + "_bb1"), 0.0, 3.80, 2.05, 1.0), 29.0, name=prefix + "_br_b1")
     b2 = extrude(_teardrop_xz(sketch(XZ.offset(-(Y_PULL + 13.5)), name=prefix + "_bb2"), 0.0, 3.80, 2.05, 1.0), 27.0, name=prefix + "_br_b2")
-    bridge = subtract([union([br_base] + br_ears, kernel=kernel.mesh, name=prefix + "_br_u"), b1, b2], kernel=kernel.mesh, name=prefix + "_sear_bridge")
+    # Safety-pin yoke: two posts straddle the cocked D-loop tongue (|Y| < 13.5 mm) just inboard of the sear.
+    # A 4 mm pin through both posts passes 0.5 mm over the tongue and holds the arm even if the sear lets go.
+    yoke_base = box(8.5, 40.4, 3.4, at=(SAFETY_X - 4.25, -20.2, 0.0), name=prefix + "_yoke_base")
+    yoke_posts = [
+        box(8.5, 6.0, 20.0, at=(SAFETY_X - 4.25, sgn * 17.2 - 3.0, 0.0), name=prefix + "_yoke_post_" + tag)
+        for sgn, tag in [(-1.0, "a"), (1.0, "b")]
+    ]
+    pin_bore = extrude(_teardrop_xz(sketch(XZ.offset(-21.0), name=prefix + "_pin_sk"), SAFETY_X, SAFETY_Z, 2.1, 1.0), 42.0, name=prefix + "_pin_bore")
+    bridge = subtract([union([br_base, yoke_base] + br_ears + yoke_posts, kernel=kernel.mesh, name=prefix + "_br_u"), b1, b2, pin_bore], kernel=kernel.mesh, name=prefix + "_sear_bridge")
 
     # 2. 1-Piece Coaxial Rocker Sear (chamfered D-shaft clears carrier top across 0..25 deg rotation!)
     sh_sk = sketch(XZ.offset(-88.2), name=prefix + "_sh_sk").polygon([

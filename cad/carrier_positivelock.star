@@ -1,4 +1,10 @@
-# MTC-180L-PL (v3 Caliper-Exact): Positive-Lock FEA-Optimized PETG 3-Mousetrap 180-Deg Carrier
+# MTC-180L-PL (v4 Caliper-Exact): Positive-Lock PETG 3-Mousetrap 180-Deg Carrier
+# v4 load path: +Z is the direction of travel, so the springs push the bail wires toward +Z.
+#   - Wire seats open on the trailing bed face (Z = 0) and close with a solid V roof on the leading side:
+#     drive torque goes straight into plastic; the snap lips and M3 washers only retain the wires.
+#   - Front crossbars sit in blind pockets (roof Z = 4.02) and bear on the same 2 mm top skin.
+#   - The three truss ribs at X_STRIKE meet a padded stop block near the arm's centre of percussion (no added mass).
+#   - Cup has a rigid outboard backstop wall (no detent lip) that takes the radial ball load.
 # Exact User Trap Measurements:
 #   - Trap wood base: 46.1 mm wide x 98.4 mm long (TRAP_PITCH = 46.2 mm side-by-side)
 #   - Bail wire: Ø1.80 mm, 40.50 mm outside-to-outside -> 38.70 mm C-to-C (WIRE_HALF_CC = 19.35 mm)
@@ -9,9 +15,16 @@ TRAP_PITCH = param("trap_pitch", 46.15, unit="mm", min=45.5, max=52.0, doc="Flus
 WIRE_HALF_CC = param("wire_half_cc", 19.35, unit="mm", min=17.0, max=21.0, doc="Half of 38.70 mm C-to-C (40.5mm OD - 1.8mm wire)")
 
 
+M3_YS = [-61.15, -31.15, -15.00, 15.00, 31.15, 61.15]
+T_SEAT = 6.2          # Plate thickness over the bail seats (X = 19.5..51.6)
+Z_WIRE = 3.05         # Bail-wire centre plane (unchanged from v3, so sear and D-loop geometry carry over)
+X_M3 = 25.8          # Radial station of the six washer-retention screws
+X_STRIKE = 104.0      # Station where the truss rib tops meet the stop block (centre of percussion is ~109 mm)
+
+
 def build_positivelock_carrier(name="mtc180_poslock", layer=None):
     # Outer trap wood edges at ±(46.15 + 23.05) = ±69.20 mm. Outboard girders sit at Y = ±(69.85..73.25) mm.
-    m3_ys = [-61.15, -31.15, -15.00, 15.00, 31.15, 61.15]   # Inboard of all 6 wires -> leaves inter-trap girders 100% un-drilled!
+    m3_ys = M3_YS   # 4.35 mm inboard of each wire (v3 stations): a recessed 9 mm M3 fender washer laps 1.05 mm under the wire
     plan_sk = (
         sketch(XY, name=name + "_plan")
         .polygon([
@@ -22,21 +35,18 @@ def build_positivelock_carrier(name="mtc180_poslock", layer=None):
             (36.2, -11.4), (19.5, -11.4), (19.5, -34.8), (36.2, -34.8),
             (36.2, -57.5), (19.5, -57.5),
         ])
-        .rect(5.0, 22.7, center=(44.8, 46.15))
-        .rect(5.0, 22.8, center=(44.8, 0.0))
-        .rect(5.0, 22.7, center=(44.8, -46.15))
         .polygon([(63.5, 25.0), (87.5, 2.1), (116.0, 2.1), (116.0, 16.5), (63.5, 59.0)])
         .polygon([(63.5, -25.0), (63.5, -59.0), (116.0, -16.5), (116.0, -2.1), (87.5, -2.1)])
         .polygon([(63.5, -18.0), (81.0, 0.0), (63.5, 18.0)])
     )
     for y_m in m3_ys:
-        plan_sk = plan_sk.circle(1.33, center=(24.2, y_m)).rect(3.3, 1.85, center=(33.0, y_m))
+        plan_sk = plan_sk.rect(3.3, 1.85, center=(34.0, y_m))
     arm_ext = extrude(plan_sk, 14.6, name=name + "_arm_ext")
 
     arm_ramped = subtract([
         arm_ext,
         extrude(sketch(XZ.offset(-76.0), name=name + "_tr_full").polygon([
-            (18.0, 4.68), (28.8, 4.68), (30.3, 3.20), (51.6, 3.20), (63.0, 14.6), (63.0, 19.0), (18.0, 19.0),
+            (18.0, T_SEAT), (51.6, T_SEAT), (60.2, 14.6), (63.0, 14.6), (63.0, 19.0), (18.0, 19.0),
         ]), 152.0, name=name + "_trim_blk"),
     ], kernel=kernel.mesh, name=name + "_arm_ramped")
 
@@ -66,11 +76,24 @@ def build_positivelock_carrier(name="mtc180_poslock", layer=None):
     cav_rings = [(-1.0, 10.40), (2.5, 10.40), (11.2, 18.20), (17.5, 21.15), (22.0, 21.85), (26.8, 21.85), (29.0, 20.95), (33.0, 22.20)]
     cutters = [loft([sketch(XY.offset(z), name=name + "_cv" + str(i)).circle(r, center=(L_BALL, 0.0)) for i, (z, r) in enumerate(cav_rings)], ruled=True, name=name + "_cup_cav")]
 
+    # Washer pockets on the trailing face. Roof at Z = 2.05 sits 0.10 mm under the wire, so a 0.8 mm fender washer
+    # plus a 1.0 mm wafer head stays 0.25 mm below the face (the cocked carrier is only 0.45 mm off the trap wood).
+    # Over the pocket the washer replaces the near-side snap lip; the far lip still snaps the wire in.
     for idx_m, y_m in enumerate(m3_ys):
-        cutters.append(loft([
-            sketch(XY.offset(-0.1), name=name + "_cs0_" + str(idx_m)).circle(2.50, center=(24.2, y_m)),
-            sketch(XY.offset(1.20), name=name + "_cs1_" + str(idx_m)).circle(1.30, center=(24.2, y_m)),
-        ], ruled=True, name=name + "_cs_" + str(idx_m)))
+        wire_side = 1.0 if y_m in [61.15, 15.00, -31.15] else -1.0
+        yw_m = y_m + wire_side * 4.35
+        cutters.append(box(9.2, 9.75, 2.15, at=(X_M3 - 4.6, min(y_m - wire_side * 5.4, yw_m), -0.1), name=name + "_wp_" + str(idx_m)))
+        cutters.append(extrude(
+            sketch(YZ.offset(X_M3 - 4.6), name=name + "_wl_sk_" + str(idx_m)).polygon([
+                (yw_m, -0.10), (yw_m - wire_side * 1.24, -0.10), (yw_m - wire_side * 1.24, 3.05),
+                (yw_m - wire_side * 0.86, 3.62), (yw_m, 3.62),
+            ]),
+            9.2, name=name + "_wl_" + str(idx_m),
+        ))
+        # Stepped bridging under the pilot: a 2.5 mm slot one layer deep splits the pocket roof into two clean
+        # bridges, then a 2.5 mm square self-tapping pilot continues through the plate (no supports, no drilling).
+        cutters.append(box(9.2, 2.5, 0.4, at=(X_M3 - 4.6, y_m - 1.25, 1.95), name=name + "_pslot_" + str(idx_m)))
+        cutters.append(box(2.5, 2.5, 4.4, at=(X_M3 - 1.25, y_m - 1.25, 1.95), name=name + "_pilot_" + str(idx_m)))
 
     for idx, yc in enumerate([-TRAP_PITCH, 0.0, TRAP_PITCH]):
         t = str(idx + 1)
@@ -78,40 +101,44 @@ def build_positivelock_carrier(name="mtc180_poslock", layer=None):
         open_sk = sketch(YZ.offset(28.8), name=name + "_opnsk_" + t)
         for sgn in [-1.0, 1.0]:
             yw = yc + sgn * WIRE_HALF_CC
-            # 1.44mm snap throat at Z=3.72 over Ø1.80mm wire seated at Z=2.15..3.95 (center Z=3.05)
+            # Wire enters from the bed face, passes the 1.44 mm snap throat at Z = 2.38 and seats at Z = 3.05
+            # against a 45-deg V roof (peak Z = 4.48), leaving 1.5 mm of solid plate on the driven side.
             snap_sk = snap_sk.polygon([
-                (yw - 0.46, 2.10), (yw + 0.46, 2.10),
-                (yw + 0.86, 2.48), (yw + 0.98, 3.05), (yw + 0.72, 3.72),
-                (yw + 1.24, 4.60), (yw + 1.24, 18.00),
-                (yw - 1.24, 18.00), (yw - 1.24, 4.60),
-                (yw - 0.72, 3.72), (yw - 0.98, 3.05), (yw - 0.86, 2.48),
+                (yw - 1.24, -0.10), (yw + 1.24, -0.10), (yw + 1.24, 1.50),
+                (yw + 0.72, 2.38), (yw + 0.98, 3.05), (yw + 0.86, 3.62), (yw, 4.48),
+                (yw - 0.86, 3.62), (yw - 0.98, 3.05), (yw - 0.72, 2.38), (yw - 1.24, 1.50),
             ])
             open_sk = open_sk.polygon([
-                (yw - 0.46, 2.10), (yw + 0.46, 2.10),
-                (yw + 0.86, 2.48), (yw + 1.24, 3.05), (yw + 1.24, 18.00),
-                (yw - 1.24, 18.00), (yw - 1.24, 3.05), (yw - 0.86, 2.48),
+                (yw - 1.24, -0.10), (yw + 1.24, -0.10), (yw + 1.24, 3.05),
+                (yw + 0.86, 3.62), (yw, 4.48), (yw - 0.86, 3.62), (yw - 1.24, 3.05),
             ])
         cutters.extend(extrude(snap_sk, 10.3, name=name + "_snp_" + t))
         cutters.extend(extrude(open_sk, 18.5, name=name + "_opn_" + t))
-        # U-bail front corner-turn reliefs (X=40.1..47.5, continuously bridging side groove yw into the ±11.35mm drop-through slot!)
-        c_bot = (
-            sketch(XY.offset(2.08), name=name + "_cb_" + t)
-            .rect(7.2, 9.5, center=(43.9, yc - WIRE_HALF_CC + 3.55))
-            .rect(7.2, 9.5, center=(43.9, yc + WIRE_HALF_CC - 3.55))
-        )
-        c_top = (
-            sketch(XY.offset(5.20), name=name + "_ct_" + t)
-            .rect(7.8, 9.8, center=(43.9, yc - WIRE_HALF_CC + 3.55))
-            .rect(7.8, 9.8, center=(43.9, yc + WIRE_HALF_CC - 3.55))
-        )
-        cutters.extend(loft([c_bot, c_top], ruled=True, name=name + "_crn_" + t))
+        # Blind crossbar pocket (X = 42.3..47.3) and corner-turn reliefs (X = 40.3..47.5); 7.2 mm bridged roof at Z = 4.02
+        half_slot = 11.4 if idx == 1 else 11.35
+        cutters.append(box(5.0, 2.0 * half_slot, 4.12, at=(42.3, yc - half_slot, -0.1), name=name + "_xbar_" + t))
+        for sgn in [-1.0, 1.0]:
+            y_r = yc + sgn * (WIRE_HALF_CC - 3.55)
+            cutters.append(box(7.2, 9.5, 4.12, at=(40.3, y_r - 4.75, -0.1), name=name + "_crn_" + t + ("a" if sgn < 0 else "b")))
 
+    # Petal reliefs: full inboard sector, but only two 2.5 mm slits outboard so a rigid backstop wall
+    # (|azimuth| < 33 deg) stays where the centrifugal load pushes the ball.
+    y_slit = 30.0 * math.tan(33.0)
     sec_sk = (
         sketch(XY.offset(18.5), name=name + "_sec_sk")
-        .polygon([(L_BALL, 0.0), (L_BALL + 30.0, -24.5), (L_BALL + 30.0, 24.5)])
+        .polygon([(L_BALL, 0.0), (L_BALL + 30.0, y_slit), (L_BALL + 30.0, 24.5)])
+        .polygon([(L_BALL, 0.0), (L_BALL + 30.0, -24.5), (L_BALL + 30.0, -y_slit)])
         .polygon([(L_BALL, 0.0), (L_BALL - 30.0, 24.5), (L_BALL - 30.0, -24.5)])
     )
     cutters.extend(extrude(sec_sk, 16.0, name=name + "_petal_sectors"))
+    # Backstop only needs to reach 4 mm above the ball equator (Z = 23); trim the rest to save tip inertia
+    cutters.append(extrude(
+        sketch(XY.offset(27.0), name=name + "_bs_top_sk").polygon([(L_BALL, 0.0), (L_BALL + 30.0, -24.5), (L_BALL + 30.0, 24.5)]),
+        8.0, name=name + "_backstop_trim",
+    ))
+    # Remove the detent lip from the backstop so the ball slides straight out along it
+    lip_pts = [(L_BALL, 0.0)] + [(L_BALL + 22.0 * math.cos(a), 22.0 * math.sin(a)) for a in range(-36, 37, 3)]
+    cutters.append(extrude(sketch(XY.offset(22.0), name=name + "_bs_sk").polygon(lip_pts), 12.0, name=name + "_backstop_bore"))
 
     carrier = subtract([outer_solid] + cutters, kernel=kernel.mesh, name=name)
     if layer != None:

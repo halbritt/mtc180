@@ -20,4 +20,19 @@ def verify_poslock_nozzles():
     return carrier.volume()
 
 
+def verify_driven_side_seats():
+    # +Z is the direction of travel: every wire must have solid plate ahead of it and an open channel behind it.
+    for i, yc in enumerate([-TRAP_PITCH, 0.0, TRAP_PITCH]):
+        for j, sgn in enumerate([-1.0, 1.0]):
+            tag = "_%d%d" % (i, j)
+            yw = yc + sgn * WIRE_HALF_CC
+            ahead = box(18.0, 0.4, 1.2, at=(21.0, yw - 0.2, 4.7), name="probe_ahead" + tag)
+            v = intersect(carrier, ahead, kernel=kernel.mesh, name="probe_hit" + tag).volume()
+            assert_true(v > 0.98 * 18.0 * 0.4 * 1.2, msg="No solid plate ahead of the wire at y=%s (%s mm3)" % (yw, v))
+            behind = box(18.0, 0.4, 2.0, at=(21.0, yw - 0.2, 0.05), name="probe_behind" + tag)
+            assert_true(not distance(carrier, behind).overlap, msg="Wire channel at y=%s is not open to the trailing face" % yw)
+    return carrier.volume()
+
+
+test("bail wires bear on solid plate on the driven side", verify_driven_side_seats)
 test("zero-warning H2S printability across 0.4, 0.6 TC, and 0.8 TC nozzles", verify_poslock_nozzles)

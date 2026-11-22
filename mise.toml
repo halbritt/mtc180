@@ -14,7 +14,6 @@ mkdir -p exports
 cadpole export --run-exports --out-dir exports cad/print_positivelock.star
 cadpole export --run-exports --out-dir exports cad/print_trigger.star
 cadpole export --run-exports --out-dir exports cad/crossbar_coupon.star
-cadpole export --run-exports --out-dir exports cad/m3_clamp_bars.star
 """
 
 [tasks.animate]
