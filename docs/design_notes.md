@@ -3,14 +3,16 @@
 ## Printable Part & Interactive 3D Deliverables (`MTC-180L-PL` Caliper-Exact Positive-Lock PETG)
 
 - **Recommended (`MTC-180L-PL` v3.1 Caliper-Exact Carrier + Distal Sear D-Loop — `~45 g` PETG, `~20 min` on H2S `.6 TC`):**
-  - **180° Launch Animated GIF:** [View `mtc180_180deg_launch.gif`](https://artifact.harm.org/3d1y54/mtc180_180deg_launch.gif)
+  - **Full-Mechanism + Trigger Pull + Ball Launch GIF:** [**Watch `mtc180_full_mechanism_launch.gif`**](https://artifact.harm.org/23m6ws/mtc180_full_mechanism_launch.gif) · *(Earlier carrier-only GIF: [`mtc180_180deg_launch.gif`](https://artifact.harm.org/3d1y54/mtc180_180deg_launch.gif))*
   - **Interactive 3D Viewer:** [Full Triggered Wood-Board Assembly](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/wtqe11/mtc180_triggered_assembly.glb) · [3-Part Trigger Kit](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/dzgs4h/mtc180_trigger_kit.glb) · [Carrier v3](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/3hgdg2/mtc180_positivelock_petg.glb)
   - **Carrier v3.1 + Trigger Kit Bundle ([`bundle.zip`](https://artifact.harm.org/0tq7z7/_artifact/bundle.zip) · [All Files](https://artifact.harm.org/0tq7z7/_artifact/)):** Carrier H2S 3MF [`mtc180_positivelock_petg_h2s.3mf`](https://artifact.harm.org/0tq7z7/mtc180_positivelock_petg_h2s.3mf?download=1) · Carrier STL [`mtc180_positivelock_petg.stl`](https://artifact.harm.org/0tq7z7/mtc180_positivelock_petg.stl?download=1) · Carrier A3 [`PDF`](https://artifact.harm.org/0tq7z7/mtc180_positivelock_petg_drawing.pdf) · **Trigger Kit H2S 3MF** [`mtc180_trigger_kit_h2s.3mf`](https://artifact.harm.org/0tq7z7/mtc180_trigger_kit_h2s.3mf?download=1) · **Trigger Kit STL** [`mtc180_trigger_kit.stl`](https://artifact.harm.org/0tq7z7/mtc180_trigger_kit.stl?download=1) · **Trigger Kit 1:1 A3 [`PDF`](https://artifact.harm.org/0tq7z7/mtc180_trigger_kit_drawing.pdf)**
-- **Fast 1:1 Crossbar Bail-Fit Verification Coupon (`X = 19.5..60.0 mm`, `40.5 × 146.5 × 8.2 mm`, `19.63 cm³` CAD / `~16–18 g` PETG, `~7–9 min` extrude on H2S `.6 TC` / `.8 TC`):**
+- **Fast 1:1 Crossbar Bail-Fit Verification Coupon (`X = 19.5..60.0 mm`, `40.5 × 146.5 × 8.2 mm` — Physically Test-Fit Verified):**
   - **Interactive 3D Viewer:** [Open 1:1 Crossbar Fit Coupon](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/8zr17w/mtc180_crossbar_fit_coupon.glb)
   - **Print & 1:1 Drawing Files ([`bundle.zip`](https://artifact.harm.org/qjkz4w/_artifact/bundle.zip) · [All Files](https://artifact.harm.org/qjkz4w/_artifact/)):** 1:1 A3 Drawing [`PDF`](https://artifact.harm.org/qjkz4w/mtc180_crossbar_fit_coupon_drawing.pdf) · Bambu H2S 3MF [`mtc180_crossbar_fit_coupon_h2s.3mf`](https://artifact.harm.org/qjkz4w/mtc180_crossbar_fit_coupon_h2s.3mf?download=1) · Coupon STL [`mtc180_crossbar_fit_coupon.stl`](https://artifact.harm.org/qjkz4w/mtc180_crossbar_fit_coupon.stl?download=1)
 
 ````carousel
+![Complete Animated Launch Sequence: Rear Pull-String Trigger -> Front Sear Release -> 180° Sweep -> Golf Ball Trajectory](images/mtc180_full_mechanism_launch.gif)
+<!-- slide -->
 ![Loaded (180°) Wood-Board Trigger Assembly — Front Coaxial Sear + Outboard Y=+83mm Rear Pull-String](images/trigger_assy_cocked.png)
 <!-- slide -->
 ![3-Part Zero-Support PETG Trigger Kit (Front Sear Bridge, Coaxial Rocker Sear, Rear Fairlead)](images/trigger_kit_hero.png)

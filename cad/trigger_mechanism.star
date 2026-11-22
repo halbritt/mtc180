@@ -43,12 +43,13 @@ def build_trigger_parts(prefix="trig"):
     b2 = extrude(_teardrop_xz(sketch(XZ.offset(-(Y_PULL + 13.5)), name=prefix + "_bb2"), 0.0, 3.80, 2.05, 1.0), 27.0, name=prefix + "_br_b2")
     bridge = subtract([union([br_base] + br_ears, kernel=kernel.mesh, name=prefix + "_br_u"), b1, b2], kernel=kernel.mesh, name=prefix + "_sear_bridge")
 
-    # 2. 1-Piece Coaxial Rocker Sear (printed flat on its coplanar u_x = +5.0 mm back face -> Z_print = 0..9.8 mm!)
-    # Print mapping: X_print = u_z, Y_print = u_y (-6.2..+88.2), Z_print = 5.0 - u_x (>= 0)
-    sh_sk = sketch(XY, name=prefix + "_sh_sk").rect(7.8, 94.4, center=(0.1, 41.0))  # X_p in [-3.8, +4.0] -> z_L <= -3.70 mm!
-    shaft_blk = extrude(sh_sk, 9.8, name=prefix + "_sh_blk")
+    # 2. 1-Piece Coaxial Rocker Sear (chamfered D-shaft clears carrier top across 0..25 deg rotation!)
+    sh_sk = sketch(XZ.offset(-88.2), name=prefix + "_sh_sk").polygon([
+        (-3.8, 0.0), (4.0, 0.0), (4.0, 6.2), (1.5, 9.6), (-2.0, 9.6), (-3.8, 7.8),
+    ])
+    shaft_blk = extrude(sh_sk, 94.4, name=prefix + "_sh_blk")
     sear_prof = sketch(XZ.offset(-6.2), name=prefix + "_sr_sk").polygon([
-        (2.0, 0.0), (12.6, 0.0), (12.6, 3.0), (10.8, 6.2), (9.55, 6.2), (9.55, 3.0), (2.0, 3.0),
+        (2.0, 0.0), (13.5, 0.0), (13.5, 3.0), (11.95, 6.2), (9.85, 6.2), (9.85, 3.0), (2.0, 3.0),
     ])
     sear_arm = extrude(sear_prof, 12.4, name=prefix + "_sr_arm")
     lev_prof = _teardrop_xz(
@@ -56,7 +57,7 @@ def build_trigger_parts(prefix="trig"):
         22.0, 3.6, 1.80, 1.0,
     )
     lev_arm = extrude(lev_prof, 10.4, name=prefix + "_lv_arm")
-    rk_bore_sk = _teardrop_xz(sketch(XZ.offset(-92.0), name=prefix + "_rk_b_sk"), 0.0, 5.0, 2.10, 1.0)
+    rk_bore_sk = _teardrop_xz(sketch(XZ.offset(-92.0), name=prefix + "_rk_b_sk"), 0.0, 5.0, 2.05, 1.0)
     rk_bore = extrude(rk_bore_sk, 102.0, name=prefix + "_rk_bore")
     rocker = subtract([union([shaft_blk, sear_arm, lev_arm], kernel=kernel.mesh, name=prefix + "_rk_u"), rk_bore], kernel=kernel.mesh, name=prefix + "_coaxial_rocker_sear")
 
@@ -74,7 +75,7 @@ def build_trigger_parts(prefix="trig"):
     return bridge, rocker, fairlead
 
 
-def pose_trigger_local(arm_radius, sear_open_deg):
+def pose_trigger_local(arm_radius, sear_open_deg, pull_slack_mm=0.0):
     bridge, rocker, fairlead = build_trigger_parts(prefix="inst_trig")
     x_piv = -(arm_radius + 37.2)
     br_p = bridge.translate((x_piv, 0.0, -11.50), name="sear_bridge_local")
@@ -88,7 +89,10 @@ def pose_trigger_local(arm_radius, sear_open_deg):
     rad = sear_open_deg * 3.14159265 / 180.0
     ex = x_piv + 1.4 * math.cos(rad) + 22.0 * math.sin(rad)
     ez = -7.70 - 1.4 * math.sin(rad) + 22.0 * math.cos(rad)
-    s_path = curve((ex, Y_PULL, ez), name="str_path").line((38.0, Y_PULL, 14.30)).line((90.0, Y_PULL, 14.30))
-    p_str = sweep_along(sketch(YZ.offset(ex), name="str_sk").circle(0.85, center=(Y_PULL, ez)), s_path, name="pull_string_local")
-    p_str.material(color="#ff7675", roughness=0.5)
-    return br_p, rk_p, fl_p, p_str
+    x_tail = 88.0 + pull_slack_mm + 22.0 * rad
+    s_path = curve((ex, Y_PULL, ez), name="str_path").line((38.0, Y_PULL, 14.30)).line((x_tail, Y_PULL, 14.30))
+    p_str = sweep_along(sketch(YZ.offset(ex), name="str_sk").circle(0.95, center=(Y_PULL, ez)), s_path, name="pull_string_local")
+    p_str.material(color="#ff5252", roughness=0.45)
+    t_handle = cylinder(4.5, 34.0, name="tg_raw").rotate(-90.0, axis=(1.0, 0.0, 0.0)).translate((x_tail, Y_PULL - 17.0, 14.30), name="pull_handle_local")
+    t_handle.material(preset=preset.petg_glossy, color="#d63031", roughness=0.32)
+    return br_p, rk_p, fl_p, p_str, t_handle
