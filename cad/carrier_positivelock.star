@@ -44,14 +44,23 @@ def build_positivelock_carrier(name="mtc180_poslock", layer=None):
     ob_sk = sketch(XY, name=name + "_ob_sk").rect(40.0, 3.40, center=(39.5, -71.55)).rect(40.0, 3.40, center=(39.5, 71.55))
     ob_girders = extrude(ob_sk, 8.2, name=name + "_ob_girders")
 
-    # 3. 2.65 mm Monocoque Conical-Spherical Cup
+    # 3. 2.65 mm Monocoque Conical-Spherical Cup + Flat-Bed Distal Sear D-Loop (Z = 0..4.8 mm)
     cup_outer = loft([
         sketch(XY.offset(0.0), name=name + "_co0").circle(13.2, center=(L_BALL, 0.0)),
         sketch(XY.offset(8.8), name=name + "_co1").circle(20.4, center=(L_BALL, 0.0)),
         sketch(XY.offset(17.8), name=name + "_co2").circle(24.5, center=(L_BALL, 0.0)),
         sketch(XY.offset(32.0), name=name + "_co3").circle(24.5, center=(L_BALL, 0.0)),
     ], ruled=True, name=name + "_cup_outer")
-    outer_solid = union([arm_ramped] + ob_girders + [cup_outer], kernel=kernel.mesh, name=name + "_outer")
+    sear_loop_sk = (
+        sketch(XY, name=name + "_sear_sk")
+        .polygon([
+            (L_BALL + 4.0, -12.2), (L_BALL + 25.0, -13.5), (L_BALL + 40.5, -13.5),
+            (L_BALL + 40.5, 13.5), (L_BALL + 25.0, 13.5), (L_BALL + 4.0, 12.2),
+        ])
+        .rect(9.0, 17.0, center=(L_BALL + 31.0, 0.0))
+    )
+    sear_loop = extrude(sear_loop_sk, 4.8, name=name + "_sear_loop")
+    outer_solid = union([arm_ramped] + ob_girders + [cup_outer, sear_loop], kernel=kernel.mesh, name=name + "_outer")
 
     # 4. Inner Cup + Flush M3 Countersinks + Snap-Fit C-Jaws (38.70mm C-to-C) + U-Corner Turn Reliefs (X=39.5..46.8mm)!
     cav_rings = [(-1.0, 10.40), (2.5, 10.40), (11.2, 18.20), (17.5, 21.15), (22.0, 21.85), (26.8, 21.85), (29.0, 20.95), (33.0, 22.20)]

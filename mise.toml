@@ -1,7 +1,8 @@
 [tasks.test]
-description = "Run Cadpole 3-nozzle Bambu H2S printability and 180-deg caliper-bail clearance tests"
+description = "Run Cadpole 3-nozzle Bambu H2S printability and 180-deg caliper-bail + trigger clearance tests"
 run = """
 cadpole test cad/print_positivelock.star
+cadpole test cad/print_trigger.star
 cadpole test cad/installed_positivelock.star
 cadpole test cad/crossbar_coupon.star
 """
@@ -11,6 +12,7 @@ description = "Regenerate STL, Bambu H2S 3MF, plate renders, and A3 PDF/SVG draw
 run = """
 mkdir -p exports
 cadpole export --run-exports --out-dir exports cad/print_positivelock.star
+cadpole export --run-exports --out-dir exports cad/print_trigger.star
 cadpole export --run-exports --out-dir exports cad/crossbar_coupon.star
 cadpole export --run-exports --out-dir exports cad/m3_clamp_bars.star
 """

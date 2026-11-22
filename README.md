@@ -18,13 +18,17 @@ All factory trigger parts (bait pedal/"catch", hold-down bar, and rear staple) a
 1. **Front Bail-Retainer Slot & Web (`X = 36.2..47.3 mm`):** Behind the front nose bar (`X > 47.3 mm`), each bail station has a `5.0 mm` through-slot (`X = 42.3..47.3 mm`) ahead of a `6.1 mm` plastic retainer web (`X = 36.2..42.3 mm`). Threading the U-bail's front transverse wire (`X = 43.2..45.0 mm`) down through the slot places the wire under the nose bar while the plastic web sits inside the closed U-bail loop, interlocking the steel bail and printed arm like two chain links.
 2. **Side-Wire C-Jaws (`X = 18.5..28.8 mm`):** Six `38.70 mm` C-to-C snap jaws click over the straight `Ø1.80 mm` side wires.
 3. **Rear M3 Lock (`X = 24.2 mm`):** Six inboard `Ø2.66 mm` self-tapping M3 bosses (`Y = ±15.0, ±31.15, ±61.15 mm`) accept `M3 × 6–8 mm` screws + washers (or flat-head screws from `Z = 0` into `exports/m3_wire_clamp_bars.stl`).
-4. **Separate External Trigger:** Because the carrier unifies all three U-bails into one rigid frame, only a single external trigger sear/pin is required—ideally engaging the solid neck behind the cup (`X = 116..128 mm`), where the `2.7×` lever arm drops total hold force for all three springs from `~44 N` at the bail tips to `~15 N`.
+4. **Wood-Board Front Coaxial Sear + Rear Pull-String Trigger (`cad/trigger_mechanism.star`):**
+   - **Recommended Trajectory Board:** `240 mm` long × `204 mm` wide × `12–19 mm` thick wood (`x_L = -190..+50 mm`), with the three stripped mousetrap bases screwed side-by-side at `x_L = -49.2..+49.2 mm` (flush with the rear `+50 mm` board edge so the `0°` released cup clears the back of the board).
+   - **Front Self-Cocking Sear (`x_L = -177.2 mm`, `Y = 0`):** Screws to the underside of the wood board (`z_L = -11.5 mm`) and hooks the carrier's distal D-loop (`X_p = 175.5..180.5 mm`, `R = 177 mm` lever arm → only `12.3 N` hold load for all 3 springs combined). Contact sits `0.35 mm` over-center against a forward positive stop so vibration cannot trip it, while a `42°` bottom cam ramp clicks shut automatically when cocking the arm by hand.
+   - **Outboard Pull-String Corridor (`Y = +83.0 mm`):** A rigid `94.4 mm` coaxial PETG rocker shaft (`0.04 mm` twist under load) transfers motion outboard to `Y = +83.0 mm` (`9.75 mm` clear of the `±73.25 mm` carrier and `13.85 mm` clear of the mousetrap pack), where a `22.0 mm` lever arm (`2.5:1` mechanical advantage → **`1.8 N` / `0.41 lbf` string pull**) connects straight back under the board to the rear fairlead (`x_L = +38 mm, Y = +83 mm`) with zero pulleys and zero holes through the wood board.
 
 ## Repository Layout
 
-- `cad/carrier_positivelock.star` — Parametric `MTC-180L-PL` carrier solid (`arm_radius`, `trap_pitch`, `wire_half_cc`).
+- `cad/carrier_positivelock.star` — Parametric `MTC-180L-PL` v3.1 carrier solid (`arm_radius`, `trap_pitch`, `wire_half_cc`) with integrated distal sear D-loop.
+- `cad/trigger_mechanism.star` & `cad/print_trigger.star` — Zero-support 3-part Wood-Board Front Coaxial Sear + Rear Pull-String Fairlead kit (`22.96 cm³` CAD / `~17 g` PETG).
 - `cad/print_positivelock.star` — Full-carrier export & Bambu Lab H2S `0.4` / `0.6 TC` / `0.8 TC` printability test.
-- `cad/installed_positivelock.star` — 5-pose `180°` sweep clearance test against 3 exact bails, `3.37°`-sloped wood bases, and cradle.
+- `cad/installed_positivelock.star` — 6-pose `180°` sweep clearance test against 3 exact bails, sloped wood bases, `240 × 204 mm` trajectory board, front coaxial sear, rear fairlead, and pull string.
 - `cad/crossbar_coupon.star` — Fast `40.5 × 146.5 × 8.2 mm` (`X = 19.5..60.0 mm`) 1:1 bail-fit verification coupon (`~7–9 min` extrude on `.6/.8 TC`).
 - `cad/m3_clamp_bars.star` — Optional 4-piece printed M3 wire clamp bars.
 - `fea/` — Deterministic STL-to-`C3D8I` brick mesher and CalculiX 2.23 two-phase FDM (`PETG_SHELL` + `PETG_GYROID15`) 4-step solver.
