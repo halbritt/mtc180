@@ -34,12 +34,12 @@ All factory trigger parts (bait pedal/"catch", hold-down bar, and rear staple) a
 
 ## Repository Layout
 
-- `cad/carrier_positivelock.star` — Parametric `MTC-180L-PL` v4 carrier solid (`arm_radius`, `trap_pitch`, `wire_half_cc`) with driven-side wire seats, cup backstop wall and integrated distal sear D-loop.
-- `cad/trigger_mechanism.star` & `cad/print_trigger.star` — Zero-support 4-part kit: Wood-Board Front Coaxial Sear + Rear Pull-String Fairlead + arm stop block (`22.96 cm³` CAD / `~17 g` PETG).
+- `cad/carrier_positivelock.star` — Parametric `MTC-180L-PL` v4.1 carrier solid (`arm_radius`, `trap_pitch`, `wire_half_cc`) with driven-side wire seats, sag-safe `Z = 4.4 mm` crossbar pockets, cup backstop wall and integrated distal sear D-loop.
+- `cad/trigger_mechanism.star` & `cad/print_trigger.star` — Zero-support 4-part kit: Wood-Board Front Coaxial Sear + Rear Pull-String Fairlead + CoP Arm Stop Block (`29.22 cm³` CAD / `~28 g` PETG).
 - `cad/print_positivelock.star` — Full-carrier export, Bambu Lab H2S `0.4` / `0.6 TC` / `0.8 TC` printability test, and a load-path test that every wire has solid plate ahead of it.
 - `cad/installed_positivelock.star` — 9-pose sweep (`180°` cocked to the `5°` stop) + trigger actuation + ball flight clearance & animation model, including the stop block, safety pin and washer screws.
-- `cad/crossbar_coupon.star` — Fast `40.5 × 146.5 × 8.2 mm` (`X = 19.5..60.0 mm`) 1:1 bail-fit verification coupon (the v3 seats were test-fit on traps; the v4 seats need a refit, see above).
-- `fea/` — Deterministic STL-to-`C3D8I` brick mesher and CalculiX 2.23 two-phase FDM (`PETG_SHELL` + `PETG_GYROID15`) 4-step solver.
+- `cad/crossbar_coupon.star` — Fast `40.5 × 146.5 × 8.2 mm` (`X = 19.5..60.0 mm`, `26.68 cm³` CAD / `~23 g` PETG) 1:1 bail-fit verification coupon (the v3 seats were test-fit on traps; print the v4.1 coupon first to verify the inverted driven-side snap).
+- `fea/` — Deterministic STL-to-`C3D8I` brick mesher and CalculiX 2.23 two-phase FDM (`PETG_SHELL` + `PETG_GYROID15`) 4-case solver (`mise run fea`).
 - `exports/` — Ready-to-slice Bambu H2S `.3mf`, `.stl`, animated `.gif`, and dimensioned A3 `.pdf` / `.svg` drawings.
 - `docs/` — Detailed design notes, ballistics table, and renders.
 
@@ -54,22 +54,29 @@ mise run fea                    # Run CalculiX 2.23 C3D8I two-phase FDM stress &
 
 ## Cup Backstop
 
-The radial (centrifugal) load on the ball reaches about `20 N` late in the swing, far more than the `3.5 N` axial detent. v4 keeps a rigid outboard wall segment (`±33°`, up to `Z = 27 mm`, `4 mm` above the ball equator) with no detent lip, separated from the two compliant side petals by `2.5 mm` slits. The ball leans on that wall during the swing and slides straight out along it at the stop.
+The radial (centrifugal) load on the ball reaches about `20 N` late in the swing, far more than the static axial detent. v4.1 keeps a rigid outboard wall segment (`±33°`, up to `Z = 27 mm`, `4 mm` above the ball equator) with no detent lip, separated from the two compliant side petals by `2.4 mm` slits. The ball leans on that wall during the swing and slides straight out along it at the stop.
 
-## Performance (model, not yet measured)
+## Performance & CalculiX 2.23 `C3D8I` FEA (`v4.1`, `42,431` + `29,826` bricks)
 
-With the repo's `2.12 J` delivered-energy assumption the v4 carrier (`61.8 g` two-phase FDM mass, `5.82 kg·cm²`) gives `≈7.5 m/s`, against `≈7.6 m/s` for v3.1. That is about `6 m` at the default `42°` launch, twice the `3 m` rubric minimum. The spring energy itself is still an assumption: measure bail force at `0°`, `90°` and `180°` with a luggage scale to pin it down. The FEA stop-shock load case still models the old bail-on-wood stop.
+With the repo's `2.12 J` delivered-energy assumption (`175°` active stroke to the `5.03°` stop), the `v4.1` carrier (`73.23 cm³` CAD, `60–64 g` PETG, $I_{\text{arm}} = 5.96\text{ kg·cm}^2$) gives $v_0 \approx 7.45\text{ m/s}$ (`~5.9 m` range at `42°` launch elevation, nearly twice the `3.0 m` target). Measure actual bail force at `0°`, `90°`, and `180°` with a luggage scale to pin down spring energy on your traps.
+
+| Load Case (`mise run fea`) | Key Result (`MTC-180L-PL` v4.1, Two-Phase FDM PETG) |
+| --- | --- |
+| **LC1: Launch (`25 N` axial `-Z` + `20 N` radial `+X` backstop)** | $U_{\max} = 2.73\text{ mm}$, $\sigma_{\text{VM},99.8\%} = 5.26\text{ MPa}$ |
+| **LC2: CoP Stop Block (`X = 102 mm` + `3 mm` rubber pad, `430 N/mm`)** | $\sigma_{\text{VM},99.8\%} = 24.94\text{ MPa}$, interlayer $\sigma_{zz,99.8\%} = 6.92\text{ MPa}$; **pad takes `657 N` while all 3 hinges combined see only `87 N` (`~29 N/trap`, `-87%` shock)** |
+| **LC3: `180°` Cocked Standby on Distal D-Loop (`1.95 N·m` preload)** | $\sigma_{\text{VM},99.8\%} = 2.25\text{ MPa}$, sear hold load `10–12 N` |
+| **LC4: `0.385 mm` Compliant Side-Petal Snap (`0.95 mm` cup mesh)** | $\sigma_{\text{VM},99.8\%} = 15.65\text{ MPa}$ (`0.025 J` snap energy vs. `>700 N` stop ejection inertia) |
 
 ## Bambu Lab H2S Print Settings (PETG, Supports OFF, Arachne ON, 15% Gyroid)
 
 Add a height-range modifier at `Z = 18.0..32.0 mm` (`3` walls on `.6/.8 TC`, `5` walls on `.4 HF`) on the full carrier so the `2.65 mm` compliant ball-retention petals print solid:
 
-| Part | Recommended Nozzle | Layer × Width | PETG Mass | Extrusion Time |
+| Part (`exports/*_h2s.3mf`) | Recommended Nozzle | Layer × Width | PETG Mass | Extrusion Time (`+~5.5 min` H2S prep) |
 | --- | --- | --- | --- | --- |
-| **Crossbar Fit Coupon** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~16–18 g` | `~7–9 min` |
-| **4-Part Trigger Kit** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~17 g` | `~9 min` |
-| **Full Carrier (`MTC-180L-PL` v4)** | `0.6 mm` TC (Sprint) | `0.40 × 0.88 mm` (`2` / `3` walls) | re-slice (v4 CAD volume is `17 %` above v3.1's `~45 g`) | re-slice |
-| **Full Carrier (`MTC-180L-PL` v4)** | `0.4 mm` HF | `0.28 × 0.56 mm` (`3` / `5` walls) | re-slice | re-slice |
+| **1. Crossbar Fit Coupon (`v4.1`, `26.7 cm³`)** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~23–24 g` | `~10 min` |
+| **2. 4-Part Trigger + Stop-Block Kit (`29.2 cm³`)** | `0.6 mm` TC or `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | `~28 g` | `~12 min` |
+| **3. Full Carrier (`MTC-180L-PL` v4.1, `73.2 cm³`)** | `0.6 mm` TC / `0.8 mm` TC (Sprint) | `0.40 × 0.88 mm` (`2` / `3` walls) | `~60–64 g` | `~27–28 min` |
+| **3b. Full Carrier (`MTC-180L-PL` v4.1, `73.2 cm³`)** | `0.4 mm` HF | `0.28 × 0.56 mm` (`3` / `5` walls) | `~60 g` | `~33 min` |
 
 ## Hardware / Fastener Notes (M4 vs. M3)
 

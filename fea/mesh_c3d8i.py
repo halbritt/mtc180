@@ -4,7 +4,7 @@ import numpy as np
 import trimesh
 
 
-def stl_to_c3d8i(stl_path: str, pitch_xy: float = 1.6, pitch_z: float = 1.0):
+def stl_to_c3d8i(stl_path: str, pitch_xy: float = 1.6, pitch_z: float = 1.0, x_min: float | None = None):
     mesh = trimesh.load_mesh(stl_path, process=True)
     if not mesh.is_watertight:
         raise RuntimeError(f"Non-watertight mesh: {stl_path}")
@@ -17,6 +17,10 @@ def stl_to_c3d8i(stl_path: str, pitch_xy: float = 1.6, pitch_z: float = 1.0):
     centers_scaled = vg.indices_to_points(ijk)
     centers = centers_scaled.copy()
     centers[:, 2] /= scale_z
+    if x_min is not None:
+        keep = centers[:, 0] >= x_min
+        ijk = ijk[keep]
+        centers = centers[keep]
 
     # Build unique corner nodes on integer lattice (i+di, j+dj, k+dk)
     # Abaqus/CalculiX C3D8/C3D8I node order:

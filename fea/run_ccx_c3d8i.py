@@ -1,7 +1,8 @@
-"""Run 4-step Two-Phase FDM PETG (Solid Shell + 15% Gyroid Core) CalculiX 2.23 C3D8I FEA study."""
-import os, subprocess
+"""Run 4-step Two-Phase FDM PETG CalculiX 2.23 C3D8I FEA for Carrier v4 (Driven V-Seats + CoP Stop + D-Loop Sear)."""
+import os
+import subprocess
 import numpy as np
-import trimesh
+from scipy.spatial import cKDTree
 from mesh_c3d8i import stl_to_c3d8i
 from fea_model import E_PETG, NU_PETG, TRAP_PITCH, WIRE_HALF_CC, M_BALL_KG, R_BALL_MM, E_SPRING_EFF_J
 from parse_frd import parse_frd, parse_dat_totals
@@ -14,29 +15,22 @@ def write_set(f, kw, name, idx0):
         f.write(", ".join(ids[k : k + 14]) + "\n")
 
 
-def run_carrier_fdm_c3d8i(stl_path: str, job_dir: str, label: str, pitch_xy: float = 1.70, pitch_z: float = 1.00, wall_mm: float = 1.80):
+def run_carrier_fdm_c3d8i(stl_path: str, job_dir: str, label: str, pitch_xy: float = 1.75, pitch_z: float = 1.00, wall_mm: float = 1.80):
     os.makedirs(job_dir, exist_ok=True)
     nodes, hex8, ec, vols, exact_vol_mm3 = stl_to_c3d8i(stl_path, pitch_xy=pitch_xy, pitch_z=pitch_z)
-    vol_scale = exact_vol_mm3 / vols.sum()
-    elem_vols = vols * vol_scale
+    elem_vols = vols * (exact_vol_mm3 / vols.sum())
 
-    # Exact distance from each brick centroid to exterior surface faces via scipy cKDTree (8 ms!)
-    from scipy.spatial import cKDTree
-    face_defs = [(0,1,2,3), (4,5,6,7), (0,1,5,4), (1,2,6,5), (2,3,7,6), (3,0,4,7)]
+    face_defs = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
     all_faces = np.vstack([np.sort(hex8[:, fd], axis=1) for fd in face_defs])
     all_fc = np.vstack([nodes[hex8[:, fd]].mean(axis=1) for fd in face_defs])
     _, idx_u, counts = np.unique(all_faces, axis=0, return_index=True, return_counts=True)
-    ext_fc = all_fc[idx_u[counts == 1]]
-    dist_surf, _ = cKDTree(ext_fc).query(ec)
+    dist_surf, _ = cKDTree(all_fc[idx_u[counts == 1]]).query(ec)
     is_shell = dist_surf <= wall_mm
-    shell_el = np.where(is_shell)[0]
-    core_el = np.where(~is_shell)[0]
+    shell_el, core_el = np.where(is_shell)[0], np.where(~is_shell)[0]
 
-    # Exact FDM element mass: 1.27 g/cm^3 in solid perimeters/shells, 15% * 1.27 = 0.1905 g/cm^3 in gyroid core
-    rho_e_kg_mm3 = np.where(is_shell, 1.27e-6, 0.15 * 1.27e-6)
-    dm_kg = elem_vols * rho_e_kg_mm3
+    dm_kg = elem_vols * np.where(is_shell, 1.27e-6, 0.15 * 1.27e-6)
     mass_g = float(dm_kg.sum() * 1e3)
-    r2_m2 = (ec[:, 0] ** 2 + (ec[:, 2] - 3.15) ** 2) * 1e-6
+    r2_m2 = (ec[:, 0] ** 2 + (ec[:, 2] - 3.05) ** 2) * 1e-6
     I_arm = float(np.sum(dm_kg * r2_m2))
     I_ball = M_BALL_KG * (R_BALL_MM * 1e-3) ** 2
     omega0 = float(np.sqrt(2.0 * E_SPRING_EFF_J / (I_arm + I_ball)))
@@ -48,23 +42,26 @@ def run_carrier_fdm_c3d8i(stl_path: str, job_dir: str, label: str, pitch_xy: flo
     for yc in (-TRAP_PITCH, 0.0, TRAP_PITCH):
         for sgn in (-1.0, 1.0):
             yw = yc + sgn * WIRE_HALF_CC
-            bail_mask |= (x >= 21.0) & (x <= 46.5) & (np.abs(y - yw) <= 2.3) & (z >= 0.8) & (z <= 4.4)
+            bail_mask |= (x >= 20.0) & (x <= 46.5) & (np.abs(y - yw) <= 2.3) & (z >= 2.0) & (z <= 5.2)
     bail_idx = np.where(bail_mask)[0]
+    # True 1-row pin line at rear of bail seat (prevents artificial moment clamping across a 6.5 mm X band!)
+    x_pin = float(x[bail_idx].min())
+    hinge_idx = bail_idx[x[bail_idx] <= x_pin + pitch_xy * 0.65]
+    xbar_idx = np.where((x >= 41.5) & (x <= 46.5) & (z >= 3.0) & (z <= 5.5) & (np.abs(y) <= 66.0))[0]
 
-    seat_r = np.hypot(x - 140.0, y)
+    seat_r = np.hypot(x - R_BALL_MM, y)
     seat_idx = np.where((seat_r >= 10.5) & (seat_r <= 22.5) & (z >= 2.5) & (z <= 19.0))[0]
-    latch_cand = np.where((x >= 51.0) & (x <= 59.0) & (np.abs(y) <= 12.0))[0]
-    z_top = float(z[latch_cand].max())
-    latch_idx = latch_cand[z[latch_cand] >= z_top - 1.8]
-    hinge_idx = bail_idx[x[bail_idx] <= 26.5]
-    pet_pos = np.where((np.abs(x - 140.0) <= 9.0) & (y > 17.5) & (z >= 27.0) & (z <= 31.2))[0]
-    pet_neg = np.where((np.abs(x - 140.0) <= 9.0) & (y < -17.5) & (z >= 27.0) & (z <= 31.2))[0]
+    backstop_idx = np.where((x >= R_BALL_MM + 15.0) & (seat_r <= 25.0) & (np.abs(y) <= 13.5) & (z >= 15.0) & (z <= 27.5))[0]
+    stoppad_idx = np.where((x >= 96.0) & (x <= 108.0) & (np.abs(y) <= 33.5) & (z >= 13.2))[0]
+    dloop_idx = np.where((x >= R_BALL_MM + 35.0) & (np.abs(y) <= 14.0) & (z >= 3.2))[0]
+    pet_pos = np.where((np.abs(x - R_BALL_MM) <= 3.5) & (y > 19.5) & (seat_r <= 22.4) & (z >= 28.2) & (z <= 29.8))[0]
+    pet_neg = np.where((np.abs(x - R_BALL_MM) <= 3.5) & (y < -19.5) & (seat_r <= 22.4) & (z >= 28.2) & (z <= 29.8))[0]
 
-    fx_ref = np.zeros(len(nodes))
-    fz_ref = np.zeros(len(nodes))
+    # +Z leads the swing: at CoP stop impact, carrier D'Alembert inertia pushes in +Z into STOPPAD (Z = 14.6)!
+    fx_ref, fz_ref = np.zeros(len(nodes)), np.zeros(len(nodes))
     xm_e = np.maximum(0.0, ec[:, 0]) * 1e-3
     dfx_e = (dm_kg / 8.0) * xm_e * (omega0 ** 2)
-    dfz_e = -(dm_kg / 8.0) * xm_e * alpha_ref
+    dfz_e = +(dm_kg / 8.0) * xm_e * alpha_ref
     for c in range(8):
         np.add.at(fx_ref, hex8[:, c], dfx_e)
         np.add.at(fz_ref, hex8[:, c], dfz_e)
@@ -80,34 +77,36 @@ def run_carrier_fdm_c3d8i(stl_path: str, job_dir: str, label: str, pitch_xy: flo
         write_set(f, "ELSET", "ESHELL", shell_el)
         if len(core_el) > 0:
             write_set(f, "ELSET", "ECORE", core_el)
-        write_set(f, "NSET", "BAIL", bail_idx)
-        write_set(f, "NSET", "LATCH", latch_idx)
-        write_set(f, "NSET", "HINGE", hinge_idx)
-        write_set(f, "NSET", "PETPOS", pet_pos)
-        write_set(f, "NSET", "PETNEG", pet_neg)
+        for nm, st in [("BAIL", bail_idx), ("HINGE", hinge_idx), ("STOPPAD", stoppad_idx), ("DLOOP", dloop_idx), ("PETPOS", pet_pos), ("PETNEG", pet_neg)]:
+            write_set(f, "NSET", nm, st)
 
         f.write(f"*MATERIAL, NAME=PETG_SHELL\n*ELASTIC\n{E_PETG}, {NU_PETG}\n*SOLID SECTION, ELSET=ESHELL, MATERIAL=PETG_SHELL\n")
         if len(core_el) > 0:
-            f.write(f"*MATERIAL, NAME=PETG_GYROID15\n*ELASTIC\n160.0, 0.30\n*SOLID SECTION, ELSET=ECORE, MATERIAL=PETG_GYROID15\n")
+            f.write("*MATERIAL, NAME=PETG_GYROID15\n*ELASTIC\n160.0, 0.30\n*SOLID SECTION, ELSET=ECORE, MATERIAL=PETG_GYROID15\n")
 
+        # Step 1: 25 N axial launch ball load (-Z) + 20 N centrifugal ball load (+X on v4 backstop)
         f.write("*STEP\n*STATIC\n*BOUNDARY\nBAIL, 1, 3, 0.0\n*CLOAD\n")
-        fs = -25.0 / len(seat_idx)
-        for nid in seat_idx: f.write(f"{nid+1}, 3, {fs:.5e}\n")
+        for nid in seat_idx:
+            f.write(f"{nid+1}, 3, {-25.0/len(seat_idx):.5e}\n")
+        for nid in backstop_idx:
+            f.write(f"{nid+1}, 1, {20.0/len(backstop_idx):.5e}\n")
         f.write("*NODE PRINT, NSET=BAIL, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
 
-        f.write("*STEP\n*STATIC\n*BOUNDARY, OP=NEW\nBAIL, 1, 3, 0.0\n*CLOAD, OP=NEW\n")
+        # Step 2: CoP Stop-Block Deceleration at X = 96..108 mm (Z = 14.6) + True Rear Pin Line
+        f.write("*STEP\n*STATIC\n*BOUNDARY, OP=NEW\nHINGE, 1, 3, 0.0\nSTOPPAD, 3, 3, 0.0\n*CLOAD, OP=NEW\n")
         for nid in np.where((np.abs(fx_ref) > 1e-7) | (np.abs(fz_ref) > 1e-7))[0]:
-            if abs(fx_ref[nid]) > 1e-7: f.write(f"{nid+1}, 1, {fx_ref[nid]:.5e}\n")
-            if abs(fz_ref[nid]) > 1e-7: f.write(f"{nid+1}, 3, {fz_ref[nid]:.5e}\n")
-        f.write("*NODE PRINT, NSET=BAIL, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
+            if abs(fx_ref[nid]) > 1e-7:
+                f.write(f"{nid+1}, 1, {fx_ref[nid]:.5e}\n")
+            if abs(fz_ref[nid]) > 1e-7:
+                f.write(f"{nid+1}, 3, {fz_ref[nid]:.5e}\n")
+        f.write("*NODE PRINT, NSET=STOPPAD, TOTALS=ONLY\nRF\n*NODE PRINT, NSET=HINGE, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
 
-        f.write("*STEP\n*STATIC\n*BOUNDARY, OP=NEW\nLATCH, 1, 3, 0.0\nHINGE, 3, 3, 0.0\n*CLOAD, OP=NEW\n")
-        fb = 48.0 / len(bail_idx)
-        for nid in bail_idx: f.write(f"{nid+1}, 3, {fb:.5e}\n")
-        f.write("*NODE PRINT, NSET=LATCH, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
-
-        f.write("*STEP\n*STATIC\n*BOUNDARY, OP=NEW\nBAIL, 1, 3, 0.0\nPETPOS, 2, 2, 0.42\nPETNEG, 2, 2, -0.42\n*CLOAD, OP=NEW\n")
-        f.write("*NODE PRINT, NSET=PETPOS, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
+        # Step 3: Cocked Standby — Distal D-Loop Sear (X = 175.5..180.5) Holding 3 Mousetrap Crossbars (X = 44.1, F_eq = 82.8 N -> 1.95 N*m about pin!)
+        f.write("*STEP\n*STATIC\n*BOUNDARY, OP=NEW\nDLOOP, 3, 3, 0.0\nHINGE, 1, 3, 0.0\n*CLOAD, OP=NEW\n")
+        f_xbar = (1950.0 / (44.1 - x_pin)) / len(xbar_idx)
+        for nid in xbar_idx:
+            f.write(f"{nid+1}, 3, {f_xbar:.5e}\n")
+        f.write("*NODE PRINT, NSET=DLOOP, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
 
     env = dict(os.environ, OMP_NUM_THREADS="8")
     env.pop("DISPLAY", None)
@@ -120,3 +119,40 @@ def run_carrier_fdm_c3d8i(stl_path: str, job_dir: str, label: str, pitch_xy: flo
         "elem_c": ec, "dm_kg": dm_kg, "vols": elem_vols, "fx_ref": fx_ref, "fz_ref": fz_ref, "is_shell": is_shell,
     }
     return nodes, hex8, dyn, steps, tots
+
+
+def run_cup_petal_c3d8i(stl_path: str, job_dir: str, pitch: float = 0.95):
+    """Fine-pitch (0.95 mm) cup subregion C3D8I solve so the 2.4 mm outboard backstop slits never bridge across voxel corners."""
+    os.makedirs(job_dir, exist_ok=True)
+    nodes, hex8, ec, _, _ = stl_to_c3d8i(stl_path, pitch_xy=pitch, pitch_z=pitch, x_min=114.0)
+    x, y, z = nodes[:, 0], nodes[:, 1], nodes[:, 2]
+    neck_idx = np.where(x <= 116.0)[0]
+    cand_pos = np.where((np.abs(x - R_BALL_MM) <= 1.6) & (y > 19.5) & (z >= 28.5) & (z <= 29.5))[0]
+    cand_neg = np.where((np.abs(x - R_BALL_MM) <= 1.6) & (y < -19.5) & (z >= 28.5) & (z <= 29.5))[0]
+    # Touch only the inner-most throat contact line so petal wall cross-sections remain free to rotate in bending
+    pet_pos = cand_pos[y[cand_pos] <= float(y[cand_pos].min()) + 0.45 * pitch]
+    pet_neg = cand_neg[y[cand_neg] >= float(y[cand_neg].max()) - 0.45 * pitch]
+
+    inp = os.path.join(job_dir, "cup_petal.inp")
+    with open(inp, "w") as f:
+        f.write("*HEADING\nFine-mesh Cup Compliant Petal Snap (0.70 mm C3D8I)\n*NODE, NSET=ALL\n")
+        for i, (nx, ny, nz) in enumerate(nodes, start=1):
+            f.write(f"{i}, {nx:.4f}, {ny:.4f}, {nz:.4f}\n")
+        f.write("*ELEMENT, TYPE=C3D8I, ELSET=EALL\n")
+        for e, row in enumerate(hex8, start=1):
+            f.write(f"{e}, " + ", ".join(str(int(k) + 1) for k in row) + "\n")
+        for nm, st in [("NECK", neck_idx), ("PETPOS", pet_pos), ("PETNEG", pet_neg)]:
+            write_set(f, "NSET", nm, st)
+        f.write(f"*MATERIAL, NAME=PETG_SHELL\n*ELASTIC\n{E_PETG}, {NU_PETG}\n*SOLID SECTION, ELSET=EALL, MATERIAL=PETG_SHELL\n")
+        f.write("*STEP\n*STATIC\n*BOUNDARY\nNECK, 1, 3, 0.0\nPETPOS, 2, 2, 0.385\nPETNEG, 2, 2, -0.385\n")
+        f.write("*NODE PRINT, NSET=PETPOS, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
+
+    env = dict(os.environ, OMP_NUM_THREADS="8")
+    env.pop("DISPLAY", None)
+    subprocess.run(["ccx", "-i", "cup_petal"], cwd=job_dir, env=env, check=True, stdout=open(os.path.join(job_dir, "solve.log"), "w"), stderr=subprocess.STDOUT)
+    steps = parse_frd(os.path.join(job_dir, "cup_petal.frd"), len(nodes))
+    tots = parse_dat_totals(os.path.join(job_dir, "cup_petal.dat"))
+    free_petal = (z >= 18.0) & (z <= 27.8)
+    vm_pet = float(np.percentile(steps[0]["vm"][free_petal], 99.8))
+    f_pet = next((abs(fy) for sname, _, fy, _ in tots if sname == "PETPOS"), 0.0)
+    return len(hex8), f_pet, vm_pet
