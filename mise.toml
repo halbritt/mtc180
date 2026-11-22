@@ -1,0 +1,20 @@
+[tasks.test]
+description = "Run Cadpole 3-nozzle Bambu H2S printability and 180-deg caliper-bail clearance tests"
+run = """
+cadpole test cad/print_positivelock.star
+cadpole test cad/installed_positivelock.star
+cadpole test cad/crossbar_coupon.star
+"""
+
+[tasks.export]
+description = "Regenerate STL, Bambu H2S 3MF, plate renders, and A3 PDF/SVG drawings into exports/"
+run = """
+mkdir -p exports
+cadpole export --run-exports --out-dir exports cad/print_positivelock.star
+cadpole export --run-exports --out-dir exports cad/crossbar_coupon.star
+cadpole export --run-exports --out-dir exports cad/m3_clamp_bars.star
+"""
+
+[tasks.fea]
+description = "Run CalculiX 2.23 C3D8I two-phase FDM PETG (solid shell + 15% gyroid) 4-step FEA"
+run = "python3 fea/run_positivelock_fea.py"

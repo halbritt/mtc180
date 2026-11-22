@@ -1,0 +1,11 @@
+# Temporary solver & build workspaces
+fea/jobs/
+build/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Cadpole / Bambu temporary files
+*.bak
+.DS_Store
