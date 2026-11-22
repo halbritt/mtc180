@@ -2,7 +2,7 @@
 # v4 load path: +Z is the direction of travel, so the springs push the bail wires toward +Z.
 #   - Wire seats open on the trailing bed face (Z = 0) and close with a solid V roof on the leading side:
 #     drive torque goes straight into plastic; the snap lips and M3 washers only retain the wires.
-#   - Front crossbars sit in blind pockets (roof Z = 4.02) and bear on the same 2 mm top skin.
+#   - Front crossbars sit in blind pockets whose bridged roof (Z = 4.4) clears the wire by 0.45 mm for sag.
 #   - The three truss ribs at X_STRIKE meet a padded stop block near the arm's centre of percussion (no added mass).
 #   - Cup has a rigid outboard backstop wall (no detent lip) that takes the radial ball load.
 # Exact User Trap Measurements:
@@ -19,7 +19,7 @@ M3_YS = [-61.15, -31.15, -15.00, 15.00, 31.15, 61.15]
 T_SEAT = 6.2          # Plate thickness over the bail seats (X = 19.5..51.6)
 Z_WIRE = 3.05         # Bail-wire centre plane (unchanged from v3, so sear and D-loop geometry carry over)
 X_M3 = 25.8          # Radial station of the six washer-retention screws
-X_STRIKE = 104.0      # Station where the truss rib tops meet the stop block (centre of percussion is ~109 mm)
+X_STRIKE = 102.0      # Station where the truss rib tops meet the stop block (centre of percussion is ~109 mm)
 
 
 def build_positivelock_carrier(name="mtc180_poslock", layer=None):
@@ -114,12 +114,16 @@ def build_positivelock_carrier(name="mtc180_poslock", layer=None):
             ])
         cutters.extend(extrude(snap_sk, 10.3, name=name + "_snp_" + t))
         cutters.extend(extrude(open_sk, 18.5, name=name + "_opn_" + t))
-        # Blind crossbar pocket (X = 42.3..47.3) and corner-turn reliefs (X = 40.3..47.5); 7.2 mm bridged roof at Z = 4.02
+        # Blind crossbar pocket (X = 42.3..47.5) and corner-turn reliefs (X = 40.3..47.5). The bridged roof sits at
+        # Z = 4.4, 0.45 mm over the wire, so PETG bridge sag cannot stop the crossbar seating. The side wires in
+        # their V seats carry the drive torque; the crossbar only locates the carrier radially.
         half_slot = 11.4 if idx == 1 else 11.35
-        cutters.append(box(5.0, 2.0 * half_slot, 4.12, at=(42.3, yc - half_slot, -0.1), name=name + "_xbar_" + t))
+        cutters.append(box(5.2, 2.0 * half_slot, 4.5, at=(42.3, yc - half_slot, -0.1), name=name + "_xbar_" + t))
         for sgn in [-1.0, 1.0]:
-            y_r = yc + sgn * (WIRE_HALF_CC - 3.55)
-            cutters.append(box(7.2, 9.5, 4.12, at=(40.3, y_r - 4.75, -0.1), name=name + "_crn_" + t + ("a" if sgn < 0 else "b")))
+            # Outer face lands exactly on the wire-channel wall (yw +- 1.24) so the two cuts share one plane
+            y_in = yc + sgn * (WIRE_HALF_CC - 8.30)
+            y_out = yc + sgn * (WIRE_HALF_CC + 1.24)
+            cutters.append(box(7.2, 9.54, 4.5, at=(40.3, min(y_in, y_out), -0.1), name=name + "_crn_" + t + ("a" if sgn < 0 else "b")))
 
     # Petal reliefs: full inboard sector, but only two 2.5 mm slits outboard so a rigid backstop wall
     # (|azimuth| < 33 deg) stays where the centrifugal load pushes the ball.

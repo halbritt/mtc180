@@ -6,14 +6,13 @@
 #   - Safety Pin through the sear-bridge yoke while standing by
 #   - Front Coaxial Over-Center Sear + Outboard Y=+83mm Rear Pull-String + T-Handle Grip
 load("carrier_positivelock.star", "build_positivelock_carrier", "L_BALL", "TRAP_PITCH", "WIRE_HALF_CC", "M3_YS", "X_M3", "X_STRIKE", "Z_WIRE")
-load("trigger_mechanism.star", "pose_trigger_local", "SAFETY_X", "SAFETY_Z")
+load("trigger_mechanism.star", "pose_trigger_local", "build_stop_block", "stop_block_dims", "SAFETY_X", "SAFETY_Z", "STOP_DEG", "BAIL_REST_DEG", "PAD_T")
 
 launch_deg = param("launch_deg", 42.0, unit="deg", min=10.0, max=80.0, doc="Ball launch elevation (42 deg is the longest range from this release height)")
-stop_deg = param("stop_deg", 5.0, unit="deg", min=3.0, max=15.0, doc="Bail angle above its rest on the trap wood where the stop block halts the arm")
+stop_deg = param("stop_deg", STOP_DEG, unit="deg", min=7.0, max=15.0, doc="Bail angle above its rest on the trap wood where the stop block halts the arm")
 stroke = param("stroke", -0.25, min=-0.25, max=1.45, step=0.02)
 
 Z_PIV = 225.0
-BAIL_REST_DEG = 3.37  # arcsin((3.50 - 0.90) / 44.10): front Ø1.8mm wire touching flat z_L = -3.50 mm wood
 theta_stop = stop_deg - BAIL_REST_DEG   # Bail angle from the board plane where the stop block halts the arm
 sweep_t = math.clamp(stroke, 0.0, 1.0)
 theta_bail = 180.0 - (180.0 - theta_stop) * sweep_t
@@ -84,25 +83,24 @@ cradle = (
 )
 cradle.material(color="#c79c6b", roughness=0.45, opacity=0.34)
 
-# Stop block on the board extension: wood riser + 3 mm rubber pad, top face parallel to the truss rib tops at theta_stop.
+# Printed stop block (trigger-kit part #4) + 3 mm stick-on pad, top face parallel to the truss rib tops at theta_stop.
 # It meets the arm at X_STRIKE (near the centre of percussion), so the bails, staples and screws take almost no shock.
 H_STRIKE = 14.6 - Z_WIRE
-def _strike_pt(x_arm, drop):
-    return (x_arm * math.cos(theta_stop) + (H_STRIKE + drop) * math.sin(theta_stop), x_arm * math.sin(theta_stop) - (H_STRIKE + drop) * math.cos(theta_stop))
-_p1, _p2 = _strike_pt(X_STRIKE - 6.0, 0.3), _strike_pt(X_STRIKE + 6.0, 0.3)
-_p3, _p4 = _strike_pt(X_STRIKE + 6.0, 3.3), _strike_pt(X_STRIKE - 6.0, 3.3)
+_sb_x0, _sb_x1, _sb_h0, _sb_h1 = stop_block_dims(theta_stop, X_STRIKE, H_STRIKE)
+stop_riser = (
+    build_stop_block(theta_stop, X_STRIKE, H_STRIKE, prefix="inst_trig")
+    .translate((_sb_x0, 0.0, -11.5))
+    .rotate(-alpha_trap_front, axis=(0.0, 1.0, 0.0))
+    .translate((0.0, 0.0, Z_PIV), name="stop_block_printed")
+)
 stop_pad = (
-    extrude(sketch(XZ.offset(-33.0), name="pad_sk").polygon([_p1, _p2, _p3, _p4]), 66.0, name="pad_raw")
+    extrude(sketch(XZ.offset(-33.0), name="pad_sk").polygon([
+        (_sb_x0, _sb_h0 - 11.5), (_sb_x1, _sb_h1 - 11.5), (_sb_x1, _sb_h1 - 11.5 + PAD_T), (_sb_x0, _sb_h0 - 11.5 + PAD_T),
+    ]), 66.0, name="pad_raw")
     .rotate(-alpha_trap_front, axis=(0.0, 1.0, 0.0))
     .translate((0.0, 0.0, Z_PIV), name="stop_rubber_pad")
 )
 stop_pad.material(color="#2d3436", roughness=0.9)
-stop_riser = (
-    extrude(sketch(XZ.offset(-33.0), name="riser_sk").polygon([_p4, _p3, (_p3[0], -11.5), (_p4[0], -11.5)]), 66.0, name="riser_raw")
-    .rotate(-alpha_trap_front, axis=(0.0, 1.0, 0.0))
-    .translate((0.0, 0.0, Z_PIV), name="stop_block_riser")
-)
-stop_riser.material(color="#b88954", roughness=0.55)
 
 stand_base = box(280.0, 252.0, 12.0, at=(-140.0, -126.0, 0.0), name="stand_baseplate")
 stand_base.material(color="#d8b589", roughness=0.58)
@@ -164,7 +162,9 @@ animation("full_mechanism_and_ball_launch", [
 def check_full_system_and_trigger_clearance():
     assert_solid(carrier_posed)
     # Enforce that all 3 mousetrap bases + sear bridge + rear fairlead sit flat & flush on cradle!
-    for flush_part in traps_wood + [trig_posed[0], trig_posed[2]]:
+    assert_true(_sb_h0 > 4.5, msg="Stop block is only %s mm tall at stop_deg=%s; raise stop_deg" % (_sb_h0, stop_deg))
+    assert_true(not distance(stop_pad, cradle).overlap, msg="Stop pad overlaps the board")
+    for flush_part in traps_wood + [trig_posed[0], trig_posed[2], stop_riser]:
         df = distance(flush_part, cradle)
         assert_true(not df.overlap, msg="%s interpenetrates mounting board at %s" % (flush_part.name, df.at))
         assert_true(df.distance < 0.05, msg="%s is not flat/flush against mounting board (gap=%s)" % (flush_part.name, df.distance))

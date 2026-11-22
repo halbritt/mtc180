@@ -1,13 +1,17 @@
 # Standalone Bambu Lab H2S Print Layout & Multi-Nozzle Test for MTC-180 Wood-Board Trigger Kit
-load("trigger_mechanism.star", "build_trigger_parts")
+load("trigger_mechanism.star", "build_trigger_parts", "build_stop_block", "STOP_DEG", "BAIL_REST_DEG")
+load("carrier_positivelock.star", "X_STRIKE", "Z_WIRE")
 
 bridge, rocker, fairlead = build_trigger_parts(prefix="h2s_trig")
 
-# Arrange all 3 flat zero-support parts cleanly on one compact H2S build plate
+stop_block = build_stop_block(STOP_DEG - BAIL_REST_DEG, X_STRIKE, 14.6 - Z_WIRE, prefix="h2s_trig")
+
+# Arrange all 4 flat zero-support parts cleanly on one compact H2S build plate
 bridge_pl = bridge.translate((-26.0, -38.0, 0.0), name="mtc180_sear_bridge")
 rocker_pl = rocker.translate((10.0, -41.0, 0.0), name="mtc180_coaxial_rocker_sear")
 fairlead_pl = fairlead.translate((54.0, -18.0, 0.0), name="mtc180_rear_string_guide")
-kit = [bridge_pl, rocker_pl, fairlead_pl]
+stop_pl = stop_block.translate((74.0, -18.0, 0.0), name="mtc180_arm_stop_block")
+kit = [bridge_pl, rocker_pl, fairlead_pl, stop_pl]
 
 export(kit, "mtc180_trigger_kit.stl", tolerance=0.01)
 export(kit, "mtc180_trigger_kit_h2s.3mf", flavor=flavor.bambu, plate="MTC-180 Front Sear + Rear Pull-String Kit (H2S)", name="mtc180_trigger_kit", printer="bambu_h2s")
@@ -38,6 +42,7 @@ def verify_trigger_h2s():
     assert_true(not distance(bridge_pl, rocker_pl).overlap, msg="bridge/rocker plate overlap")
     assert_true(not distance(rocker_pl, fairlead_pl).overlap, msg="rocker/fairlead plate overlap")
     assert_true(not distance(bridge_pl, fairlead_pl).overlap, msg="bridge/fairlead plate overlap")
+    assert_true(not distance(stop_pl, fairlead_pl).overlap, msg="stop block/fairlead plate overlap")
     return total_v
 
 

@@ -85,6 +85,40 @@ def build_trigger_parts(prefix="trig"):
     return bridge, rocker, fairlead
 
 
+BAIL_REST_DEG = 3.37   # arcsin((3.50 - 0.90) / 44.10): front wire touching the flat trap wood
+STOP_DEG = 8.4         # Default stop: bail angle above that rest (about 5 deg from the board plane)
+PAD_T = 3.0      # Stick-on rubber / foam pad on top of the printed stop block
+PAD_GAP = 0.3    # Modelled air gap between pad and truss at the stop
+
+
+def stop_block_dims(theta_stop, x_strike, h_strike):
+    """Stop-block footprint in the board frame: (x_front, x_back, h_front, h_back) for a 12 mm strike zone."""
+    drop = h_strike + PAD_GAP + PAD_T
+    xs = [(x_strike + dx) * math.cos(theta_stop) + drop * math.sin(theta_stop) for dx in [-6.0, 6.0]]
+    hs = [(x_strike + dx) * math.sin(theta_stop) - drop * math.cos(theta_stop) + 11.5 for dx in [-6.0, 6.0]]
+    return xs[0], xs[1], hs[0], hs[1]
+
+
+def build_stop_block(theta_stop, x_strike, h_strike, prefix="trig"):
+    # Printed riser for the arm stop: flat base on the board, top face tilted to theta_stop so the three
+    # truss ribs land flat on the pad. Two counterbored 4.1 mm holes sit between the ribs, under the pad.
+    x0, x1, h0, h1 = stop_block_dims(theta_stop, x_strike, h_strike)
+    w = x1 - x0
+    blk = extrude(
+        sketch(XZ.offset(-33.0), name=prefix + "_sb_sk").polygon([(0.0, 0.0), (w, 0.0), (w, h1), (0.0, h0)]),
+        66.0, name=prefix + "_sb_blk",
+    )
+    cuts = []
+    for sgn, tag in [(-1.0, "a"), (1.0, "b")]:
+        c = (w / 2.0, sgn * 14.0)
+        cuts.append(cylinder(2.05, h1 + 0.4, at=(c[0], c[1], -0.2), name=prefix + "_sb_hole_" + tag))
+        # Flat-bottom 7.4 mm counterbore, 2.6 mm deep at the low edge: hides a #6 pan-head wood screw under the pad
+        cuts.append(cylinder(3.7, h1 - h0 + 3.0, at=(c[0], c[1], h0 - 2.6), name=prefix + "_sb_cb_" + tag))
+    block = subtract([blk] + cuts, kernel=kernel.mesh, name=prefix + "_stop_block")
+    block.material(preset=preset.petg_glossy, color="#0984e3", roughness=0.34)
+    return block
+
+
 def pose_trigger_local(arm_radius, sear_open_deg, pull_slack_mm=0.0):
     bridge, rocker, fairlead = build_trigger_parts(prefix="inst_trig")
     x_piv = -(arm_radius + 37.2)
