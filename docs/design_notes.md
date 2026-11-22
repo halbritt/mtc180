@@ -1,6 +1,6 @@
-> **v4.1 note (2026-11-22):** Current geometry — driven-side `+Z` wire V-seats, sag-safe `Z = 4.40 mm` crossbar pockets, recessed trailing-face M3 washer locks, `±33°` cup backstop wall, `X = 102 mm` printed Center-of-Percussion stop block (Trigger Kit Part #4), and `Ø4 mm` safety-pin yoke — is documented in top-level `README.md`. Sections 1–3 below preserve earlier baseline/v2/v3 design history for provenance.
+> **v5 Floor-Flush Rubric-Compliant Release (2026-11-22):** Re-architected for strict literal compliance with *The Mousetrap Catapult* rubric (`Design #4` & `#5`: single `≤ 1"` wood base sitting 100% flush on the floor inside `2' × 2'`, all 3 Victor mousetraps laying dead flat right-side up on the base, ball starting `< 3"` above the ground, zero rubber bands, rapid `6–8 ball` reload, and Day 2 two-target range adjustability) plus `IMG_4479.jpg` torsion-spring clearance (`X_MIN = 28.5 mm` clearing the `25.7 mm` black spring leg by `> 2.8 mm`) and 100% `M4` hardware. Current build, print, and FEA details are in top-level `README.md`; sections below preserve earlier `v2–v4.1` carrier provenance.
 
-# MTC-180L-PL Caliper-Exact FEA-Optimized PETG 3-Mousetrap Carrier (38.70 mm C-to-C × 43.2 mm Bail, Bambu H2S)
+# MTC-180 Design Provenance (`v5` Floor-Flush Cam-Driven Catapult & Earlier `v2–v4.1` Direct Carriers)
 
 ## Printable Part & Interactive 3D Deliverables (`MTC-180L-PL` v4.1 Positive-Lock PETG)
 
@@ -13,27 +13,17 @@
     - **Step 3 — 4-Part Wood-Board Trigger + CoP Stop-Block Kit (`29.22 cm³` CAD):** Bambu H2S 3MF [`mtc180_trigger_kit_h2s.3mf`](https://artifact.harm.org/5n7ry9/mtc180_trigger_kit_h2s.3mf?download=1) · STL [`mtc180_trigger_kit.stl`](https://artifact.harm.org/5n7ry9/mtc180_trigger_kit.stl?download=1) · 1:1 A3 [`PDF`](https://artifact.harm.org/5n7ry9/mtc180_trigger_kit_drawing.pdf)
 
 ````carousel
-![Complete Animated Launch Sequence: Rear Pull-String Trigger -> Front Sear Release -> 180° Sweep -> Golf Ball Trajectory](images/mtc180_full_mechanism_launch.gif)
+![Complete Floor-Flush Launch Sequence (v5): Rear Pull-String -> Gravity Sear -> 166° Bail Stroke -> 42° CoP Stop & Golf Ball Trajectory](images/mtc180_floorflush_launch.gif)
 <!-- slide -->
-![Loaded (180°) Wood-Board Trigger Assembly — Front Coaxial Sear + Outboard Y=+83mm Rear Pull-String](images/trigger_assy_cocked.png)
+![Cocked Floor-Flush Assembly (v5) — 3 Flat Victor Traps, X>=28.5mm Spring-Cleared Coupler, R=98mm Cam & 1.21" Open Gravity Cup](images/assy_cocked.png)
 <!-- slide -->
-![3-Part Zero-Support PETG Trigger Kit (Front Sear Bridge, Coaxial Rocker Sear, Rear Fairlead)](images/trigger_kit_hero.png)
+![At 42° Center-of-Percussion Stop Sleeve — Full Bail Stroke Absorbed & Tangential Golf-Ball Release](images/assy_stop.png)
 <!-- slide -->
-![Bambu Lab H2S Build-Plate Layout — Trigger Kit (~17 g PETG, Zero Supports)](images/trigger_h2s_plate.png)
+![Spring-Cleared 3-Bail Coupler (X = 28.5..56.5 mm, 6x M4 Washer Locks, ~13 g PETG, ~6 min Print)](images/coupler_hero.png)
 <!-- slide -->
-![1:1 Crossbar Bail-Fit Verification Coupon (40.5 × 146.5 × 8.2 mm — Exact Crop X = 19.5..60.0 mm)](images/coupon_hero.png)
+![Monolithic Throwing Arm (R=98mm V-Grooved Cam + 6-Notch Sear Quadrant + Self-Centering V-Cup)](images/arm_hero.png)
 <!-- slide -->
-![Bambu Lab H2S Build-Plate Layout — Crossbar Fit Coupon (~7–9 min Extrude on .6/.8 TC)](images/coupon_h2s_plate.png)
-<!-- slide -->
-![MTC-180L-PL Caliper-Exact PETG Carrier — 38.70mm C-to-C Snap-Jaws, 43.2mm Crossbar Slots & Outboard Girders](images/poslock_hero.png)
-<!-- slide -->
-![Bambu Lab H2S Build-Plate Layout — MTC-180L-PL (Zero Supports, 43.3 g PETG)](images/poslock_h2s_plate.png)
-<!-- slide -->
-![3D Clearance Verification Against 3x 46.1×98.4mm Sloped Wood Bases, 40.5×43.2mm Bails & Wide Cradle](images/poslock_assy_fit.png)
-<!-- slide -->
-![CalculiX 2.23 C3D8I Two-Phase FDM FEA Comparison: Baseline v2 vs FEA-Optimized MTC-180L](images/fea_v2_vs_ultralight.png)
-<!-- slide -->
-![Animated Full-180° Launch Sequence](images/mtc180_180deg_launch.gif)
+![Floor-Flush Stanchions, 3-Angle CoP Stop Sleeve, M4 Cord Roller & Counterweighted Gravity Ratchet Sear](images/stanchion_kit_hero.png)
 ````
 
 ---
@@ -53,11 +43,9 @@
 
 ---
 
-## 2. Trajectory Control via Mousetrap Base Angle
+## 2. Earlier `v2–v4.1` Trajectory Control via Mousetrap Base Angle *(Superseded by `v5` Floor-Flush Ratchet & Pin Selector)*
 
-![180-Degree Trajectory, Base-Angle Range Curve, Retention Force & Exit Speed](images/direct180_ballistics.png)
-
-When the three mousetraps are mounted on the **underside** of a $95\text{ mm}$-long tilted cradle plate (supported outboard at $Y = \pm 98\text{ mm}$ at trunnion height $Z_{\text{pivot}} = 215\text{ mm}$ so the $148.2 \times 132.8 \times 32.0\text{ mm}$ carrier sweeps underneath with $>50\text{ mm}$ floor clearance), the launchvelocity vector $\vec{v}_0$ at the end of the $180^\circ$ sweep is perpendicular to the mousetrap wooden bases:
+When the three mousetraps were mounted on the **underside** of a tilted cradle plate (`v2–v4.1`), the launch velocity vector $\vec{v}_0$ at the end of the $180^\circ$ sweep was perpendicular to the mousetrap wooden bases:
 
 $$\gamma_{\text{launch}} = 90^\circ - \beta_{\text{horiz}}$$
 
