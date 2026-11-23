@@ -71,5 +71,5 @@ def build_throwing_arm(name="mtc180_throwing_arm", layer=None):
     arm = subtract([body, post_step, post_bore, cv_b, cv_t], kernel=kernel.mesh, name=name)
     if layer != None:
         layer.add(arm)
-    arm.material(preset=preset.petg_glossy, color="#00b894", roughness=0.32)
+    arm.material(preset=preset.petg_glossy, color="#009639", roughness=0.32)
     return arm

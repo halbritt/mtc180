@@ -117,7 +117,7 @@ string = sweep_along(
 )
 string.material(color="#ff5252", roughness=0.45)
 handle = cylinder(4.2, 32.0, name="ph_raw").translate((0.0, 0.0, -16.0)).rotate(90.0, axis=(1.0, 0.0, 0.0)).translate((-262.0 - pull, 0.0, 44.0), name="pull_handle")
-handle.material(preset=preset.petg_glossy, color="#d63031")
+handle.material(preset=preset.petg_glossy, color="#D6001C")
 
 # Stop wedge + foam pad near the arm's centre of percussion
 wx0, wx1, wh0, wh1 = stop_wedge_dims(ZH, T_BOARD)

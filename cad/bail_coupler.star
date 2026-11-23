@@ -68,5 +68,5 @@ def build_bail_coupler(name="mtc180_bail_coupler", layer=None):
     coupler = subtract([outer] + cutters, kernel=kernel.mesh, name=name)
     if layer != None:
         layer.add(coupler)
-    coupler.material(preset=preset.petg_glossy, color="#fd9644", roughness=0.32)
+    coupler.material(preset=preset.petg_glossy, color="#FF671F", roughness=0.32)
     return coupler

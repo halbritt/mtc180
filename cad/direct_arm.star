@@ -85,7 +85,7 @@ def build_direct_arm(name="mtc180_direct_arm", layer=None):
     )
     if layer != None:
         layer.add(arm)
-    arm.material(preset=preset.petg_glossy, color="#00b894", roughness=0.32)
+    arm.material(preset=preset.petg_glossy, color="#009639", roughness=0.32)
     return arm
 
 
@@ -96,5 +96,5 @@ def build_ball_backstop(name="mtc180_ball_backstop"):
     blk = box(BLOCK_LEN, BLOCK_W, h, at=(0.0, -BLOCK_W / 2.0, 0.0), name=name + "_blk")
     pilot = cylinder(1.75, 12.0, at=(BLOCK_HOLE_OFF, 0.0, -0.2), name=name + "_pilot")
     block = subtract([blk, pilot], kernel=kernel.mesh, name=name)
-    block.material(preset=preset.petg_glossy, color="#e17055", roughness=0.34)
+    block.material(preset=preset.petg_glossy, color="#FF671F", roughness=0.34)
     return block

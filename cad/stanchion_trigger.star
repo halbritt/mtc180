@@ -49,7 +49,7 @@ def build_stanchion_cheek(side=1, name="stanchion_cheek"):
         for i, xk in enumerate([-142.0, -56.0, 18.0])
     ]
     cheek = subtract([union([plate, flange], kernel=kernel.mesh, name=name + "_u")] + cuts, kernel=kernel.mesh, name=name)
-    cheek.material(preset=preset.petg_glossy, color="#0984e3", roughness=0.34)
+    cheek.material(preset=preset.petg_glossy, color="#0086D6", roughness=0.34)
     return cheek
 
 
@@ -57,7 +57,7 @@ def build_trigger_and_rollers(prefix="st"):
     # 1) Cylindrical CoP Stop Sleeve (Ø14.4 mm PETG core + 2.8 mm rubber wrap = Ø20.0 mm OD, 19.8 mm wide for 20.4 mm gap)
     stop_sk = sketch(XY, name=prefix + "_ss_sk").circle(7.20).circle(2.15)
     stop_sleeve = extrude(stop_sk, 19.8, name=prefix + "_stop_sleeve")
-    stop_sleeve.material(preset=preset.petg_glossy, color="#0984e3", roughness=0.34)
+    stop_sleeve.material(preset=preset.petg_glossy, color="#0086D6", roughness=0.34)
 
     # 2) Free-spinning M4 Cord Roller Sheave (Ø14.4 mm rims, Ø11.8 mm 45-deg V-waist, 19.4 mm wide)
     rl_b = loft([sketch(XY.offset(0.0), name=prefix + "_r0").circle(7.2).circle(2.15), sketch(XY.offset(8.4), name=prefix + "_r1").circle(7.2).circle(2.15)], ruled=True, name=prefix + "_rb")
@@ -65,7 +65,7 @@ def build_trigger_and_rollers(prefix="st"):
     rl_v2 = loft([sketch(XY.offset(9.7), name=prefix + "_r4").circle(5.9).circle(2.15), sketch(XY.offset(11.0), name=prefix + "_r5").circle(7.2).circle(2.15)], ruled=True, name=prefix + "_rv2")
     rl_t = loft([sketch(XY.offset(11.0), name=prefix + "_r6").circle(7.2).circle(2.15), sketch(XY.offset(19.4), name=prefix + "_r7").circle(7.2).circle(2.15)], ruled=True, name=prefix + "_rt")
     roller = union([rl_b, rl_v1, rl_v2, rl_t], kernel=kernel.mesh, name=prefix + "_cord_roller")
-    roller.material(preset=preset.petg_glossy, color="#fdcb6e", roughness=0.30)
+    roller.material(preset=preset.petg_glossy, color="#FCE300", roughness=0.30)
 
     # 3) Gravity-Counterweighted Ratchet Sear Pawl (zero rubber bands; sleek top nose clears adjacent ramps across all 6 notches)
     pawl_sk = (
@@ -78,5 +78,5 @@ def build_trigger_and_rollers(prefix="st"):
         .circle(1.85, center=(-28.5, -6.5))
     )
     pawl = extrude(pawl_sk, 14.0, name=prefix + "_gravity_sear")
-    pawl.material(preset=preset.petg_glossy, color="#fdcb6e", roughness=0.32)
+    pawl.material(preset=preset.petg_glossy, color="#FCE300", roughness=0.32)
     return stop_sleeve, roller, pawl

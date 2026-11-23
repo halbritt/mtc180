@@ -119,7 +119,7 @@ tc2 = sweep_along(sketch(YZ.offset(-150.0), name="tc2_sk").circle(0.90, center=(
 for tc in [tc1, tc2]:
     tc.material(color="#ff5252", roughness=0.45)
 pull_handle = cylinder(4.2, 32.0, name="ph_r").translate((0.0, 0.0, -16.0)).rotate(90.0, axis=(1.0, 0.0, 0.0)).translate((trig_tail_x, 0.0, T_BOARD + 27.0), name="rear_pull_handle")
-pull_handle.material(preset=preset.petg_glossy, color="#d63031")
+pull_handle.material(preset=preset.petg_glossy, color="#D6001C")
 
 bx0 = XP + (-L_BALL - 1.30) * math.cos(psi_arm) + 1.30 * math.sin(psi_arm)
 bz0 = ZP + (L_BALL + 1.30) * math.sin(psi_arm) + 1.30 * math.cos(psi_arm)

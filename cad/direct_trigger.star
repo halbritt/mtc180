@@ -43,7 +43,7 @@ def build_sear_hook(name="mtc180_sear_hook"):
     pts.extend([(5.2, 22.4), (5.2, 27.5), (-3.5, 27.5), (-3.5, 38.0), (-10.5, 38.0), (-10.5, 4.0), (-7.3, -4.0)])
     sk = sketch(XY, name=name + "_sk").polygon(pts).circle(2.15, center=(0.0, 0.0)).circle(1.4, center=(-7.0, 34.0))
     hook = extrude(sk, SEAR_T, name=name)
-    hook.material(preset=preset.petg_glossy, color="#fdcb6e", roughness=0.34)
+    hook.material(preset=preset.petg_glossy, color="#FCE300", roughness=0.34)
     return hook
 
 
@@ -63,7 +63,7 @@ def build_sear_bracket(name="mtc180_sear_bracket"):
     stop_wall = box(3.0, 18.4, 12.0, at=(-10.5, -9.2, 0.0), name=name + "_stop_wall")
     bore = extrude(_teardrop_xz(sketch(XZ.offset(-10.0), name=name + "_bore_sk"), 0.0, PIVOT_H, 2.15), 20.0, name=name + "_bore")
     bracket = subtract([union([plate, stop_wall] + cheeks, kernel=kernel.mesh, name=name + "_u"), bore], kernel=kernel.mesh, name=name)
-    bracket.material(preset=preset.petg_glossy, color="#0984e3", roughness=0.34)
+    bracket.material(preset=preset.petg_glossy, color="#0086D6", roughness=0.34)
     return bracket
 
 
@@ -97,5 +97,5 @@ def build_stop_wedge(length, h0, h1, name="mtc180_stop_wedge"):
         cuts.append(cylinder(2.15, h1 + 0.4, at=(length / 2.0, sgn * 13.0, -0.2), name=name + "_hole_" + tag))
         cuts.append(cylinder(4.0, h1, at=(length / 2.0, sgn * 13.0, 4.0), name=name + "_cb_" + tag))
     wedge = subtract([blk] + cuts, kernel=kernel.mesh, name=name)
-    wedge.material(preset=preset.petg_glossy, color="#0984e3", roughness=0.34)
+    wedge.material(preset=preset.petg_glossy, color="#0086D6", roughness=0.34)
     return wedge
