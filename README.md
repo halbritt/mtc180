@@ -4,14 +4,14 @@
 
 Parametric [Cadpole](https://github.com/halbritt/cadpole) CAD and [CalculiX 2.23](http://www.dhondt.de/) `C3D8I` two-phase FDM PETG finite-element model engineered for strict compliance with *The Mousetrap Catapult* rubric (`Design #1–#7`, `Materials #1–#2`) and verified against `IMG_4479.jpg` physical spring-clearance photometry:
 
-1. **100% Floor-Flush Flat Base (`Design #4` & `#5`):** Single `450 × 204 × 18.0 mm` (`17.7" × 8.0" × 0.71"`, **`≤ 1"`**) plywood board sitting dead flush on the floor inside the **`2' × 2'`** launch box (`19.4"` diagonal << `3 ft` max diameter). All three stripped Victor mousetraps screw **right-side up and dead flat (`0.00°`)** onto the base (`springs 100% unaltered`).
-2. **Photometry-Verified Torsion-Spring Clearance (`IMG_4479.jpg`):** Calibrated at `21.64 px/mm`, each Victor trap's black torsion-spring moving leg crosses over the left copper bail wire (`Y = yc - 19.35 mm`) and terminates at **`X = 25.7 mm, Y = yc - 21.2 mm`**. Starting `cad/bail_coupler.star` at **`X_MIN = 28.50 mm`** provides **`> 2.8 mm` axial clearance** on all three traps (`assert_true(ds.distance > 2.0)` across all 8 poses) while keeping solid `1.52 mm` driven-side PETG floors under all six `38.70 mm` C-to-C wires.
-3. **Cord-and-Horn Linkage + `< 3"` Ball Height:** A braided non-stretch cord runs from the `16.3 cm³` 3-bail coupler (`R_PULL = 50.8 mm`) under a free-spinning `M4` V-roller (`(34, 39) mm`) to an `M4` cord post on the throwing arm's horn (`104 mm` from the pivot, `L_BALL = 170.0 mm`). The cord does not wrap anything on the arm. Both ends are cranks, and the horn reaches dead centre (post, pivot and roller in line) `2°` past the `42°` stop, so the bails are slowed to a halt as the arm reaches full speed and hand their own kinetic energy to the arm. At full cock (`notch 6`) the cord holds the bails at `165°`; they are at `39°` when the arm stops, still on a taut cord. `cad/linkage.star` holds the exact cord kinematics used by the assembly; `mise run camsim` is the launch model.
-   - **Why not a cam:** the earlier `R = 98 mm` circular cam needed the bails to keep paying out cord at a constant rate, but the cord's lever arm about the trap hinge collapses over the last `50°` of bail travel (`43 mm` at `90°`, `22 mm` at `40°`, `5 mm` at `7°`). In the same model the cam's cord goes slack with the bails at `53°`, and that design reaches `5.2 m/s` (`2.9 m`), not the `7.4 m/s` previously stated. It also only wound the bails to `156°`, not `173°`.
-   - **Cocked ball bottom height:** **`30.7 mm` (`1.21 inches` — `< 3.00 inches` rubric limit)** in an open top-loading `45°` V-cradle (`~0.5 s` drop-in reload for `6–8 balls` in `< 90 s`).
-   - **Center-of-Percussion Stop Sleeve (`42° / 50°` quick-pin holes):** `Ø14.4 mm` PETG core wrapped with `3 mm` rubber (`Ø20.4 mm` OD) catches the upper truss chord near its center of percussion with `> 83 mm` ball flight clearance.
-4. **Zero Rubber Bands — 6-Notch Range Quadrant + Gravity Ratchet Sear (`Design #6`, Day 2 Accuracy):** A counterweighted 1-piece PETG sear pawl (`cad/stanchion_trigger.star`) pivots on an `M4` bolt with **gravity alone** tipping its tooth into **6 calibrated range notches** (range table below), tripped from behind by a braided pull-string (the tooth carries about `79 N` at full cock; measure the pull on the first print).
-5. **100% `M4` Hardware (`Zero M3 Needed`):** Uses `M4` washers + self-tapping `M4 × 6–8 mm` screws on the 3-bail coupler, `1×` `M4 × 8 mm` screw + washer for the horn's cord post, `4×` `M4 × 45–50 mm` bolts/pins through the stanchion bores (arm pivot, cord roller, sear pawl, and 2-angle stop sleeve), and `#6` / `M4` wood screws into the `3/4"` plywood board.
+1. **100% Floor-Flush Flat Base (`Design #4` & `#5`):** Single `470 × 204 × 18.0 mm` (`18.5" × 8.0" × 0.71"`, **`≤ 1"`**) plywood board sitting dead flush on the floor inside the **`2' × 2'`** launch box (`20.2"` diagonal << `3 ft` max diameter). All three stripped Victor mousetraps screw **right-side up and dead flat (`0.00°`)** onto the base (`springs 100% unaltered`).
+2. **Photometry-Verified Torsion-Spring Clearance (`IMG_4479.jpg`):** Calibrated at `21.64 px/mm`, each Victor trap's black torsion-spring moving leg crosses over the left copper bail wire (`Y = yc - 19.35 mm`) and terminates at **`X = 25.7 mm, Y = yc - 21.2 mm`**. Starting `cad/bail_coupler.star` at **`X_MIN = 28.50 mm`** provides **`> 2.8 mm` axial clearance** on all three traps (`assert_true(ds.distance > 2.0)` across all poses) while keeping solid `1.52 mm` driven-side PETG floors under all six `38.70 mm` C-to-C wires.
+3. **Through-Bolted Cord-and-Horn Linkage (`> 5.0 m` Carry, `+5.0°` Dead-Centre Stop Margin) + `< 3"` Ball Height:** A braided non-stretch cord runs from the `16.3 cm³` 3-bail coupler (`R_PULL = 50.8 mm`, `XH = 124.0 mm`) under a free-spinning `M4` V-roller (`(48, 43) mm`) to a **through-bolted `M4 × 16` cord post** (`washer + hex nut` on a `Ø7.6 mm` collar centered on `Y = 0`) on the `12 mm`-wide throwing arm's horn (`108 mm` at `39.0°` from pivot `(-96, 72) mm`, `L_BALL = 170.0 mm`). The horn reaches dead centre at `53.0°` (**`+5.0°` safety margin past the `42°` stop**, preventing rubber-sleeve compression from crossing dead centre) while sweeping the bails `171° -> 34°` on a taut cord at only **`84 N` peak dynamic cord tension** (down from `136 N`) for **`6.93 m/s` (`5.08 m` air carry)**.
+   - **Why not a cam:** the earlier `R = 98 mm` circular cam needed constant cord payout while the bail lever arm collapsed late in the stroke, going slack at `53°` (`5.2 m/s`, `2.9 m`).
+   - **Cocked ball bottom height (`< 3.00"` across Notches 6, 5, and 4):** **`27.6 mm` (`1.09"`)** at Notch 6, **`51.4 mm` (`2.02"`)** at Notch 5, and **`75.1 mm` (`2.96"`)** at Notch 4 in an open top-loading `45°` V-cradle (`~0.5 s` drop-in reload for `6–8 balls` in `< 90 s`).
+   - **Center-of-Percussion Stop Sleeve (`42° / 50° / 58°` quick-pin holes):** `Ø14.4 mm` PETG core wrapped with `2.8 mm` rubber (`Ø20.0 mm` OD) catches the upper truss chord near its center of percussion; combining Notches `6/5/4` with the `42°/50°/58°` stop pins covers `1.7–5.1 m` while keeping ball start height `< 3.0"` on every shot.
+4. **Zero Rubber Bands — 6-Notch Range Quadrant + Gravity Ratchet Sear (`Design #6`, Day 2 Accuracy):** A counterweighted 1-piece PETG sear pawl (`cad/stanchion_trigger.star`) pivots on an `M4` bolt (`(-116, 33) mm`) with **gravity alone** tipping its tooth into **6 CAD-verified range notches** (`a_lock = -89.25° + ψ_cock`, verified `< 0.85 mm` engagement across all 6 notches in `cadpole test`), tripped from behind by a braided pull-string (`~84 N` tooth compression in self-locking geometry).
+5. **100% `M4` Hardware (`Zero M3 Needed`):** Uses `6×` `M4 × 6–8 mm` screws + `M4` washers on the 3-bail coupler, `1×` `M4 × 16 mm` bolt + `M4` washer + `M4` hex nut through the horn's cord post, `4×` `M4 × 45 mm` bolts/pins through the stanchion bores (`20.4 mm` inner gap), and `#6` / `M4` wood screws into the `3/4"` plywood board.
 
 ## Alternative: Direct-Drive Rail Arm (arm bolted straight to the three traps)
 
@@ -58,45 +58,44 @@ mise run fea        # Run CalculiX 2.23 C3D8I two-phase FDM stress & inertia stu
 mise run camsim     # Cord-linkage launch model: range table and sensitivities (--cam 96.5 --th-cock 156 = the old cam)
 ```
 
-## CalculiX 2.23 `C3D8I` FEA (`v5`, `20,821` Coupler + `18,150` Arm Bricks)
+## CalculiX 2.23 `C3D8I` FEA (`v5.1`, `20,821` Coupler + `16,197` Arm Bricks)
 
 | Component / Load Case (`mise run fea`) | Verified Result (`Two-Phase FDM PETG`: `1.8 mm` Shell + `15%` Gyroid) |
 | --- | --- |
-| **3-Bail Coupler (`16.28 cm³`, `140 N` peak cord pull)** | $I_{\text{coupler}} = 0.319\text{ kg·cm}^2$, $U_{\max} = 0.21\text{ mm}$, $\sigma_{\text{VM},99.8\%} = 6.44\text{ MPa}$ |
-| **Throwing Arm (`101.37 cm³`, `64 g` in the two-phase model, `L = 170 mm`)** | $I_{\text{arm}} = 4.686\text{ kg·cm}^2$, $v_0 = 6.72\text{ m/s}$ from the linkage model (**`~4.8 m` carry at `42°`**) |
-| **Arm LC1: Launch Drive (`60 N` cord pull square to the horn, `2×` static full cock)** | $\sigma_{\text{VM},99.8\%} = 3.43\text{ MPa}$ |
-| **Arm LC2: CoP Padded Stop Sleeve (`Ø20.4 mm` OD, `380 N/mm` rubber)** | $\sigma_{\text{VM},99.8\%} = 11.99\text{ MPa}$ (`4.2×` safety factor to `50 MPa` PETG yield) |
-| **Arm LC3: Full-Cock Ratchet Tooth #6 Standby (`29 N` cord)** | $\sigma_{\text{VM},99.8\%} = 1.34\text{ MPa}$ (`75 N` tooth compression into gravity sear) |
+| **3-Bail Coupler (`16.28 cm³`, `85 N` peak dynamic cord pull)** | $I_{\text{coupler}} = 0.319\text{ kg·cm}^2$, $U_{\max} = 0.13\text{ mm}$, $\sigma_{\text{VM},99.8\%} = 3.88\text{ MPa}$ |
+| **12 mm Throwing Arm (`84.82 cm³`, `55.4 g` PETG + `4.0 g` M4×16 post bolt/nut)** | $I_{\text{arm}} = 3.980\text{ kg·cm}^2$, $v_0 = 6.93\text{ m/s}$ (**`5.08 m` carry at `42°`**, `84 N` peak cord) |
+| **Arm LC1: Peak Dynamic Cord Pull (`85 N` at `+21°` on through-bolted collar)** | $\sigma_{\text{VM},99.8\%} = 2.72\text{ MPa}$ |
+| **Arm LC2: CoP Padded Stop Sleeve (`Ø20.0 mm` OD, `380 N/mm` rubber, `416 N`)** | $\sigma_{\text{VM},99.8\%} = 11.87\text{ MPa}$ (`4.2×` safety factor to `50 MPa` PETG yield) |
+| **Arm LC3: Full-Cock Ratchet Tooth #6 Standby (`31 N` static cord)** | $\sigma_{\text{VM},99.8\%} = 1.64\text{ MPa}$ (`83.5 N` tooth compression into gravity sear) |
 
 ## Day 1 Max Distance & Day 2 Accuracy Range Table (model, `mise run camsim`)
 
-| Ratchet Sear Notch | Arm Cock Angle (`ψ_cock`) | Bail Windup (`θ_bail`) | `42°` hole: speed / carry | `50°` hole: speed / carry |
-| --- | --- | --- | --- | --- |
-| **Notch #6 (`MAX` — Day 1)** | `-6.7°` (`ball 1.21" off floor`) | `165°` | `6.7 m/s` / **`4.8 m`** | `5.8 m/s` / `3.5 m` |
-| **Notch #5** | `+2.2°` | `144°` | `6.0 m/s` / **`3.9 m`** | `5.1 m/s` / `2.7 m` |
-| **Notch #4** | `+11.2°` | `126°` | `5.4 m/s` / **`3.1 m`** | `4.4 m/s` / `2.1 m` |
-| **Notch #3** | `+19.6°` | `108°` | `4.7 m/s` / **`2.5 m`** | `3.8 m/s` / `1.6 m` |
-| **Notch #2** | `+28.0°` | `89°` | `3.9 m/s` / **`1.8 m`** | `2.9 m/s` / `1.0 m` |
-| **Notch #1 (Short)** | `+35.8°` | `69°` | `3.0 m/s` / **`1.1 m`** | `1.7 m/s` / `0.4 m` |
+| Ratchet Sear Notch | Arm Cock (`ψ_cock`) & Ball Start Height | Bail Windup (`θ_bail`) | `42°` hole: speed / carry | `50°` hole: speed / carry | `58°` hole: speed / carry |
+| --- | --- | --- | --- | --- | --- |
+| **Notch #6 (`MAX` — Day 1)** | `-8.2°` (**`1.08"` `< 3"`**) | `171°` | `6.9 m/s` / **`5.1 m`** | `6.2 m/s` / **`4.0 m`** | `5.8 m/s` / **`3.1 m`** |
+| **Notch #5** | `-0.2°` (**`2.02"` `< 3"`**) | `146°` | `6.1 m/s` / **`4.0 m`** | `5.4 m/s` / **`3.1 m`** | `4.9 m/s` / **`2.3 m`** |
+| **Notch #4** | `+7.8°` (**`2.96"` `< 3"`**) | `129°` | `5.5 m/s` / **`3.3 m`** | `4.8 m/s` / **`2.5 m`** | `4.2 m/s` / **`1.7 m`** |
+| **Notch #3** | `+16.5°` (`3.96"`) | `110°` | `4.9 m/s` / **`2.6 m`** | `4.1 m/s` / `1.8 m` | `3.3 m/s` / `1.1 m` |
+| **Notch #2** | `+25.5°` (`4.94"`) | `90°` | `4.1 m/s` / **`1.9 m`** | `3.2 m/s` / `1.2 m` | `2.2 m/s` / `0.5 m` |
+| **Notch #1 (Short)** | `+34.5°` (`5.86"`) | `67°` | `3.1 m/s` / **`1.1 m`** | `2.0 m/s` / `0.5 m` | — |
 
-- These are model numbers. The spring energy (`2.12 J` for three traps over `180°`) and its torque curve are assumed, not measured, and nothing here has been printed or fired. With the springs `20%` weaker the full-cock carry is `3.8 m`; `20%` stronger, `5.8 m`. Calibrate the table on the real machine before Day 2.
-- The `50°` hole is not a fine trim: it stops the arm `10°` before the horn's dead centre, which costs about `1 m/s` as well as steepening the launch. There is no `34°` hole, because the arm cannot usefully pass dead centre.
-- **Tying the cord:** with the arm resting on the `42°` stop, push the arm down into notch 6 and tie the loop on the horn post so the bails sit `15°` short of flat on the traps (`165°`). The model is not sensitive to this: `±2 mm` of cord changes the carry by less than `0.1 m`. A cord that is too short will not let the arm reach notch 6.
-- **Rubric check for Day 2:** the ball is within `3"` of the floor only at notch 6 (and close to it at notch 5). Loaded at a higher notch it starts above `3"`; confirm with the teacher how that rule is applied before relying on notches 1–4.
+- These are model numbers (`2.12 J` assumed for three traps over `180°`). With springs `20%` weaker, full-cock carry is `4.1 m`; `20%` stronger, `6.1 m`. Calibrate on the real machine before Day 2.
+- **Strict `< 3"` Day 2 mode:** Notches **#6, #5, and #4** all hold the cocked golf ball strictly within `3.00"` of the floor (`1.08"`, `2.02"`, `2.96"`). Combining Notches `#6/#5/#4` with the `42° / 50° / 58°` quick-pin stop holes covers **`1.7 m` to `5.1 m`** without ever exceeding `3.00"` ball height.
+- **Tying the cord:** push the arm down into Notch #6 (`-8.2°`) and tie the non-stretch loop onto the `Ø7.6 mm` horn collar so the bails sit `~2°` off flat back (`171°`); tighten the `M4 × 16` bolt + washer + rear hex nut (`1–2 mm` longer cord only shifts carry by `0.16–0.28 m`).
 
 ## Bambu Lab H2S Print Plates (PETG, Supports OFF, Arachne ON, 15% Gyroid)
 
 | Plate (`exports/*_h2s.3mf`) | Recommended Nozzle | Layer × Width | PETG Mass | Extrusion Time |
 | --- | --- | --- | --- | --- |
 | **1. `mtc180_bail_coupler` (`16.3 cm³` — Print & Test-Fit First)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~12 g`** | **`~5.5 min`** |
-| **2. `mtc180_throwing_arm` (`101.4 cm³` — 14 mm Truss + Cord Horn)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` / `3` walls) | **`~58 g`** (scaled from the `125.5 cm³` slice, not re-sliced) | **`~26 min`** (scaled) |
-| **3. `mtc180_stanchion_kit` (`268.2 cm³` — 5 Parts)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~145 g`** | **`~62 min`** |
+| **2. `mtc180_throwing_arm` (`84.8 cm³` — 12 mm Truss + Through-Bolted Horn)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` / `3` walls) | **`~49–55 g`** | **`~22 min`** |
+| **3. `mtc180_stanchion_kit` (`309.9 cm³` — 5 Parts, Centered Plate)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~165 g`** | **`~70 min`** |
 
 ## Hardware BOM (100% `M4` — Zero `M3`, Zero Rubber Bands)
 
-- **Wood Base:** `1×` `450 × 204 × 18 mm` (`17.7" × 8.0" × 3/4"`, `≤ 1"`) flat plywood board.
-- **Mousetraps:** `3×` standard Victor mousetraps (`46.1 × 98.4 mm`; strip only the bait pedal and loose trigger wire — leave all springs and spring-anchoring staples untouched), screwed flat (`0.00°`) side-by-side at `X = 62.8..161.2 mm`.
-- **3-Bail Coupler Locks:** `6×` `M4 × 6–8 mm` screws + `6×` `M4` fender washers (`9–12 mm` OD) into the self-tapping `Ø3.5 mm` bosses (C-jaw snap lips + spring preload also hold the wires screwless for initial test fits).
-- **Cord Post:** `1×` `M4 × 8 mm` screw + `1×` `M4` fender washer (`≤ 12 mm` OD) into the `Ø3.5 mm` pilot at the horn tip; the cord loop turns on the printed collar under the washer.
-- **Stanchion Axles & Mounting:** `4×` `M4 × 35–45 mm` bolts/pins (arm pivot, front cord roller, gravity sear pivot, and quick-pin CoP stop sleeve) + `6×` `M4` or `#6` wood screws through the outboard stanchion L-flanges into the plywood base.
-- **Cord & Cushioning:** Non-stretch braided Dacron/nylon cord (`~250 mm` drive cord + `~300 mm` rear trigger string) and `3 mm` adhesive rubber/foam strip on the CoP stop sleeve and front bail landing pad.
+- **Wood Base:** `1×` `470 × 204 × 18 mm` (`18.5" × 8.0" × 3/4"`, `≤ 1"`) flat plywood board.
+- **Mousetraps:** `3×` standard Victor mousetraps (`46.1 × 98.4 mm`; strip only the bait pedal and loose trigger wire — leave all springs and spring-anchoring staples untouched), screwed flat (`0.00°`) side-by-side at `X = 74.8..173.2 mm` (`hinge at X = 124.0 mm`).
+- **3-Bail Coupler Locks:** `6×` `M4 × 6–8 mm` screws + `6×` `M4` fender washers (`9–12 mm` OD) into the self-tapping `Ø3.5 mm` bosses.
+- **Through-Bolted Cord Post:** `1×` `M4 × 16 mm` bolt + `1×` `M4` fender washer (`≤ 12 mm` OD) + `1×` `M4` hex nut clamping across the horn tip (`cord loop turns on the Ø7.6 mm printed collar centered on Y = 0`).
+- **Stanchion Axles & Mounting:** `4×` `M4 × 45 mm` bolts/pins (arm pivot, front cord roller, gravity sear pivot, and quick-pin CoP stop sleeve across the `20.4 mm` stanchion gap) + `6×` `M4` or `#6` wood screws through the outboard stanchion L-flanges into the plywood base.
+- **Cord & Cushioning:** Non-stretch braided Dacron/nylon cord (`~260 mm` drive cord + `~300 mm` rear trigger string) and `2.8–3 mm` adhesive rubber/foam strip on the CoP stop sleeve and front bail landing pad.

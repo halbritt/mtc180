@@ -13,6 +13,8 @@ from mesh_c3d8i import stl_to_c3d8i
 from fea_model import E_PETG, NU_PETG, TRAP_PITCH, WIRE_HALF_CC, M_BALL_KG
 from parse_frd import parse_frd, parse_dat_totals
 from cam_launch_sim import HORN_R, HORN_A, Linkage, carry, release_height
+import re
+W_ARM = float(re.search(r"^W_ARM\s*=\s*([0-9.]+)", (REPO_ROOT / "cad/throwing_arm.star").read_text(), re.M).group(1))
 
 
 def _write_set(f, kw, name, idx0):
@@ -60,10 +62,10 @@ def solve_coupler(stl_path: str, job_dir: str):
         f.write(f"*MATERIAL, NAME=PS\n*ELASTIC\n{E_PETG}, {NU_PETG}\n*SOLID SECTION, ELSET=ESHELL, MATERIAL=PS\n")
         if (~sh).any():
             f.write("*MATERIAL, NAME=PG\n*ELASTIC\n160.0, 0.30\n*SOLID SECTION, ELSET=ECORE, MATERIAL=PG\n")
-        # 140 N peak dynamic cord pull (linkage model: 138 N as the horn nears dead centre) (-X/+Z breakaway + radial) reacted across the 6 driven-side wire seats
+        # 85 N peak dynamic cord pull (linkage model: ~79 N near the stop) (-X/+Z breakaway + radial) reacted across the 6 driven-side wire seats
         f.write("*STEP\n*STATIC\n*BOUNDARY\nBAIL, 1, 3, 0.0\n*CLOAD\n")
         for nid in eye:
-            f.write(f"{nid+1}, 1, {-96.0/len(eye):.5e}\n{nid+1}, 3, {-103.0/len(eye):.5e}\n")
+            f.write(f"{nid+1}, 1, {-58.0/len(eye):.5e}\n{nid+1}, 3, {-62.0/len(eye):.5e}\n")
         f.write("*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
     env = {k: v for k, v in os.environ.items() if k != "DISPLAY"}
     env["OMP_NUM_THREADS"] = "8"
@@ -80,14 +82,16 @@ def solve_arm(stl_path: str, job_dir: str):
     sh, dm = _shell_split(nodes, hex8, ec, vols, exact_vol)
     x, y, z = nodes[:, 0], nodes[:, 1], nodes[:, 2]
     piv = np.where(np.hypot(x, y) <= 3.8)[0]
-    # Cord post on the horn tip (collar + platform under it); the cord loop bears here
+    # Through-bolted M4 cord post on the horn tip (collar Z = 4.6..7.4 mm + clamped bore)
     tx, ty = HORN_R * np.cos(np.radians(HORN_A)), HORN_R * np.sin(np.radians(HORN_A))
-    cam = np.where((np.hypot(x - tx, y - ty) <= 4.6) & (z <= 8.4))[0]
-    # Cord direction at full cock in the arm frame (analysis/cam_launch_sim.py): -79 deg, 97 mm lever about the pivot
-    cdx, cdy = float(np.cos(np.radians(-79.0))), float(np.sin(np.radians(-79.0)))
-    cup = np.where((x <= -148.0) & (x >= -190.0) & (y <= -14.0) & (np.abs(z - 7.0) <= 6.0))[0]
-    stop_pad = np.where((x >= -86.0) & (x <= -64.0) & (y >= 16.0) & (y <= 34.0))[0]
-    tooth6 = np.where((np.hypot(x, y) >= 31.5) & (np.hypot(x, y) <= 37.5) & (np.abs(x - 4.2) <= 4.0) & (y <= -30.0))[0]
+    cam = np.where((np.hypot(x - tx, y - ty) <= 4.4) & (z >= 4.2) & (z <= 7.5))[0]
+    # LC1: 85 N peak dynamic cord pull at +21 deg in arm frame (matching solve_coupler & camsim peak near stop)
+    cdx_pk, cdy_pk = float(np.cos(np.radians(21.0))), float(np.sin(np.radians(21.0)))
+    # LC3: 31 N static full-cock cord pull at -71 deg in arm frame (bails at 171 deg, arm at Notch 6 = -8.2 deg)
+    cdx_ck, cdy_ck = float(np.cos(np.radians(-71.0))), float(np.sin(np.radians(-71.0)))
+    cup = np.where((x <= -148.0) & (x >= -190.0) & (y <= -14.0) & (np.abs(z - W_ARM / 2.0) <= 5.0))[0]
+    stop_pad = np.where((x >= -86.0) & (x <= -64.0) & (y >= 15.0) & (y <= 34.0))[0]
+    tooth6 = np.where((np.hypot(x, y) >= 31.5) & (np.hypot(x, y) <= 37.5) & (x >= -6.2) & (x <= -1.2) & (y <= -30.0))[0]
     I_arm = float(np.sum(dm * ((ec[:, 0] ** 2 + ec[:, 1] ** 2) * 1e-6)))
     inp = os.path.join(job_dir, "arm.inp")
     with open(inp, "w") as f:
@@ -105,12 +109,12 @@ def solve_arm(stl_path: str, job_dir: str):
         f.write(f"*MATERIAL, NAME=PS\n*ELASTIC\n{E_PETG}, {NU_PETG}\n*SOLID SECTION, ELSET=ESHELL, MATERIAL=PS\n")
         if (~sh).any():
             f.write("*MATERIAL, NAME=PG\n*ELASTIC\n160.0, 0.30\n*SOLID SECTION, ELSET=ECORE, MATERIAL=PG\n")
-        # Step 1: Launch drive: 60 N cord pull square to the horn (5.8 N m, 2x the static full-cock torque) reacted by ball inertia at cup + M4 pivot
+        # Step 1: Peak Dynamic Cord Pull (85 N on through-bolted collar at +21 deg, matching coupler FEA)
         f.write(f"*STEP\n*STATIC\n*BOUNDARY\nPIV, 1, 3, 0.0\n{cup[0]+1}, 2, 2, 0.0\n*CLOAD\n")
         for nid in cam:
-            f.write(f"{nid+1}, 1, {60.0*cdx/len(cam):.5e}\n{nid+1}, 2, {60.0*cdy/len(cam):.5e}\n")
+            f.write(f"{nid+1}, 1, {85.0*cdx_pk/len(cam):.5e}\n{nid+1}, 2, {85.0*cdy_pk/len(cam):.5e}\n")
         for nid in cup:
-            f.write(f"{nid+1}, 2, {-28.0/len(cup):.5e}\n{nid+1}, 1, {-22.0/len(cup):.5e}\n")
+            f.write(f"{nid+1}, 2, {-16.0/len(cup):.5e}\n{nid+1}, 1, {-12.0/len(cup):.5e}\n")
         f.write("*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
         # Step 2: CoP Stop Sleeve Impact (D'Alembert angular deceleration alpha=10000 rad/s^2 reacted by PIV + STOPP)
         f.write("*STEP\n*STATIC\n*BOUNDARY, OP=NEW\nPIV, 1, 3, 0.0\nSTOPP, 2, 2, 0.0\n*CLOAD, OP=NEW\n")
@@ -124,10 +128,10 @@ def solve_arm(stl_path: str, job_dir: str):
         for nid in np.where((np.abs(fx) > 1e-7) | (np.abs(fy) > 1e-7))[0]:
             f.write(f"{nid+1}, 1, {fx[nid]:.5e}\n{nid+1}, 2, {fy[nid]:.5e}\n")
         f.write("*NODE PRINT, NSET=STOPP, TOTALS=ONLY\nRF\n*NODE PRINT, NSET=PIV, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
-        # Step 3: Full-Cock Ratchet Tooth #6 Holding the 29 N static cord pull (bails at 165 deg)
+        # Step 3: Full-Cock Ratchet Tooth #6 Holding the 31 N static cord pull (bails at 171 deg)
         f.write("*STEP\n*STATIC\n*BOUNDARY, OP=NEW\nPIV, 1, 3, 0.0\nTOOTH, 1, 1, 0.0\n*CLOAD, OP=NEW\n")
         for nid in cam:
-            f.write(f"{nid+1}, 1, {29.0*cdx/len(cam):.5e}\n{nid+1}, 2, {29.0*cdy/len(cam):.5e}\n")
+            f.write(f"{nid+1}, 1, {31.0*cdx_ck/len(cam):.5e}\n{nid+1}, 2, {31.0*cdy_ck/len(cam):.5e}\n")
         f.write("*NODE PRINT, NSET=TOOTH, TOTALS=ONLY\nRF\n*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n")
     env = {k: v for k, v in os.environ.items() if k != "DISPLAY"}
     env["OMP_NUM_THREADS"] = "8"
@@ -144,22 +148,21 @@ def main():
     a_stl = REPO_ROOT / "exports" / "mtc180_throwing_arm.stl"
     nc, vc, mc, Ib, uc, vmc = solve_coupler(str(c_stl), str(FEA_DIR / "jobs" / "v5_coupler"))
     na, va, ma, Ia, steps, tots, free, fx, fy = solve_arm(str(a_stl), str(FEA_DIR / "jobs" / "v5_arm"))
-    # Launch speed from the cord-linkage model with this arm's sliced mass and inertia (+2.5 g screw and washer on the post)
-    cg = (-26.0, 6.1)
-    arm = (ma * 1e-3 + 0.0025, Ia + 0.0025 * (HORN_R * 1e-3) ** 2, cg)
+    # Launch speed from the cord-linkage model with this arm's sliced mass and inertia (+4.0 g through-bolted M4 x 16 + washer + nut)
+    cg = (-22.0, 6.0)
+    arm = (ma * 1e-3 + 0.0040, Ia + 0.0040 * (HORN_R * 1e-3) ** 2, cg)
     sim = Linkage(arm=arm).run()
     v0 = sim["v"]
-    I_ball = M_BALL_KG * (0.170 ** 2)
-    ke_stop = 0.5 * (Ia + 0.0025 * (HORN_R * 1e-3) ** 2) * (v0 / 0.1713) ** 2
+    ke_stop = 0.5 * (Ia + 0.0040 * (HORN_R * 1e-3) ** 2) * (v0 / 0.1713) ** 2
     u2 = steps[1]["U"]
     u_el = 0.5 * float(np.sum(fx * u2[:, 0] + fy * u2[:, 1])) * 1e-3
-    f_stop = next(( float(np.hypot(rx, ry)) for sn, rx, ry, _ in tots if sn == "STOPP"), 0.0)
-    f_piv = next(( float(np.hypot(rx, ry)) for sn, rx, ry, _ in tots if sn == "PIV"), 0.0)
+    f_stop = next((float(np.hypot(rx, ry)) for sn, rx, ry, _ in tots if sn == "STOPP"), 0.0)
+    f_piv = next((float(np.hypot(rx, ry)) for sn, rx, ry, _ in tots if sn == "PIV"), 0.0)
     lam = float(np.sqrt(ke_stop / max(1e-9, u_el + 0.5 * (f_stop ** 2) / 380000.0)))
     f_sear = next((abs(rx) for sn, rx, _, _ in tots if sn == "TOOTH"), 0.0)
     print(f"Solved {nc} coupler + {na} arm C3D8I elements in {time.time()-t0:.1f}s")
-    print(f"  Coupler: Vol={vc:.2f} cm^3 | Mass={mc:.1f} g | I_coupler={Ib*1e4:.3f} kg*cm^2 | 140N Cord U_max={uc:.2f} mm, VM_p99.8={vmc:.2f} MPa")
-    print(f"  Arm    : Vol={va:.2f} cm^3 | Mass={ma:.1f} g | I_arm={Ia*1e4:.3f} kg*cm^2 | v0={v0:.2f} m/s (carry {carry(v0, 42, release_height(48)):.2f} m @ 42 deg, linkage model)")
+    print(f"  Coupler: Vol={vc:.2f} cm^3 | Mass={mc:.1f} g | I_coupler={Ib*1e4:.3f} kg*cm^2 | 85N Cord U_max={uc:.2f} mm, VM_p99.8={vmc:.2f} MPa")
+    print(f"  Arm    : Vol={va:.2f} cm^3 | Mass={ma:.1f} g | I_arm={Ia*1e4:.3f} kg*cm^2 | v0={v0:.2f} m/s (carry {carry(v0, 42, release_height(48)):.2f} m @ 42 deg, peak cord {sim['tension']:.0f} N)")
     print(f"  Arm LC1 (Launch Drive): VM_p99.8={float(np.percentile(steps[0]['vm'][free], 99.8)):.2f} MPa")
     print(f"  Arm LC2 (CoP Stop Sleeve): VM_p99.8={float(np.percentile((steps[1]['vm']*lam)[free], 99.8)):.2f} MPa | Stop={f_stop*lam:.0f} N vs Pivot={f_piv*lam:.0f} N")
     print(f"  Arm LC3 (Ratchet Tooth #6 Standby): VM_p99.8={float(np.percentile(steps[2]['vm'][free], 99.8)):.2f} MPa | Tooth Reaction={f_sear:.1f} N")

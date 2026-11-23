@@ -44,15 +44,15 @@ L_BALL = _const("cad/throwing_arm.star", "L_BALL")
 R_ROLL_EFF = _const("cad/linkage.star", "R_ROLL_EFF")
 TH_COCK_FULL = _const("cad/linkage.star", "TH_COCK_FULL")
 TH_REST, TH_MAX = _const("cad/linkage.star", "TH_REST"), _const("cad/linkage.star", "TH_MAX")
-NOTCH_PSIS = [35.80, 28.00, 19.60, 11.20, 2.20, -6.74]   # notch 1..6 (cad/throwing_arm.star)
+NOTCH_PSIS = [float(x) for x in re.search(r"^NOTCH_PSIS\s*=\s*\[([^\]]+)\]", (ROOT / "cad/throwing_arm.star").read_text(), re.M).group(1).split(",")][::-1]
 
 M_BALL = 0.04593
 R_BALL_PIVOT = math.hypot(L_BALL + 1.30, 1.30) * 1e-3    # ball centre from the arm pivot
 I_BAIL = 0.319e-4 + 0.08e-4 + 0.18e-4                    # coupler (FEA) + 3 steel bails + 6 M4 screws/washers
-# Sliced arm (2 walls, 15% gyroid): mass kg, inertia about the pivot kg m^2, c.g. in the arm frame mm.
-# Horn arm: `mise run fea` inertia plus the M4 x 8 screw and washer (2.5 g) on the cord post.
-ARM_HORN_MASS, ARM_HORN_I = 0.0640, 4.686e-4
-ARM_HORN = (ARM_HORN_MASS + 0.0025, ARM_HORN_I + 0.0025 * (HORN_R * 1e-3) ** 2, (-26.0, 6.1))
+# Sliced 12 mm horn arm (2 walls, 15% gyroid): mass kg, inertia about pivot kg m^2, c.g. in arm frame mm,
+# plus through-bolted M4 x 16 screw + fender washer + hex nut (4.0 g) on the cord post.
+ARM_HORN_MASS, ARM_HORN_I = 0.0554, 3.980e-4
+ARM_HORN = (ARM_HORN_MASS + 0.0040, ARM_HORN_I + 0.0040 * (HORN_R * 1e-3) ** 2, (-22.0, 6.0))
 ARM_CAM = (0.072, 6.096e-4, (-26.2, 22.2))               # the previous cam arm (README at d898349)
 E_SPRING, RATIO = 2.12, 0.5
 G = 9.80665
@@ -204,7 +204,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cam", type=float, default=None, help="model a circular cam of this effective radius instead of the horn")
     ap.add_argument("--th-cock", type=float, default=TH_COCK_FULL, help="bail angle held by notch 6 (sets the cord length)")
-    ap.add_argument("--stops", type=int, nargs="*", default=[42, 50])
+    ap.add_argument("--stops", type=int, nargs="*", default=[42, 50, 58])
     a = ap.parse_args()
     ref = Linkage(th_cock=a.th_cock, cam=a.cam)
     what = "circular cam, R_eff %.1f mm" % a.cam if a.cam else "cord horn, post at %.1f mm / %.1f deg (dead centre at arm %.1f deg)" % (HORN_R, HORN_A, ref.psi_dead)
@@ -214,13 +214,15 @@ def main():
         print("stop hole %d deg:" % stop)
         for n in range(6, 0, -1):
             pc = NOTCH_PSIS[n - 1]
+            r_rad = math.radians(pc)
+            z_bot = ZP + (L_BALL + 1.30) * math.sin(r_rad) + 1.30 * math.cos(r_rad) - 21.335
             o = Linkage(pc, 90.0 - stop, cord=ref.cord, cam=a.cam).run()
             if o is None:
-                print("   notch %d (arm %+5.1f): not reachable with this cord" % (n, pc))
+                print("   notch %d (arm %+5.1f, ball %.2f in): not reachable with this cord" % (n, pc, z_bot / 25.4))
                 continue
             sl = "cord slack from bail %.0f deg" % o["slack"][0] if o["slack"] else "cord taut to the stop"
-            print("   notch %d (arm %+5.1f): bails %5.1f deg, %.2f J, %s, bails at %2.0f deg when the arm stops, peak cord %3.0f N, v %.2f m/s, carry %.2f m%s" % (
-                n, pc, o["th_cock"], o["work"], sl, o["th_end"], o["tension"], o["v"], carry(o["v"], stop, release_height(90 - stop)),
+            print("   notch %d (arm %+5.1f, ball %.2f in): bails %5.1f deg, %.2f J, %s, bails at %2.0f deg, peak cord %3.0f N, v %.2f m/s, carry %.2f m%s" % (
+                n, pc, z_bot / 25.4, o["th_cock"], o["work"], sl, o["th_end"], o["tension"], o["v"], carry(o["v"], stop, release_height(90 - stop)),
                 "" if o["reached"] else "  (ARM DOES NOT REACH THE STOP)"))
     print("sensitivity, notch 6, 42 deg stop:")
     cases = [("spring E -20%", dict(e=1.70), 0.0), ("spring E +20%", dict(e=2.54), 0.0), ("rest/cocked 0.3", dict(ratio=0.3), 0.0),

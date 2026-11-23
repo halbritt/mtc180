@@ -1,11 +1,11 @@
-# MTC-180 v5 drive-cord kinematics, shared by the assembly and (by value) analysis/cam_launch_sim.py.
+# MTC-180 v5.1 drive-cord kinematics, shared by the assembly and analysis/cam_launch_sim.py.
 # Side view, X forward, Z up, degrees.  Cord path: coupler eye -> under the roller -> cord post on the arm horn.
 
-XH = 112.0            # trap hinge line
+XH = 124.0            # trap hinge line on the 470 mm floor-flush board
 R_ROLL_EFF = 6.85     # roller V-waist radius 5.9 + cord radius 0.95
 TH_REST = 7.0         # bails on the front landing pad
 TH_MAX = 173.0        # bails folded flat back onto the traps
-TH_COCK_FULL = 165.0  # the cord is tied so that notch 6 holds the bails here
+TH_COCK_FULL = 171.0  # notch 6 holds the bails 2 deg off flat back (near-full 180 deg spring windup)
 
 
 def _tangent(qx, qz, cx, cz, side):
