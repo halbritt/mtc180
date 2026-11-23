@@ -6,7 +6,7 @@
 # Nothing is left in the arm's path.
 
 load("bail_coupler.star", "Z_WIRE")
-load("direct_arm.star", "rail_top", "TONGUE_T", "X_LATCH", "RIDGE_R")
+load("direct_arm.star", "rail_top", "rail_crest", "TONGUE_T", "X_LATCH", "RIDGE_R")
 
 R_ARC = 22.0          # nose arc radius
 ARC_BACK = 1.5        # arc centre is this far behind the pivot (closing bias)
@@ -79,7 +79,7 @@ def stop_wedge_dims(z_hinge, t_board):
     """(x_front, x_back, h_front, h_back) of the stop wedge in the base frame (hinge at X = 0)."""
     out = []
     for x in [STOP_X0, STOP_X1]:
-        y = rail_top(x) + Z_WIRE
+        y = rail_crest(x) + Z_WIRE
         xw = x * math.cos(STOP_DEG) + y * math.sin(STOP_DEG)
         zw = z_hinge + x * math.sin(STOP_DEG) - y * math.cos(STOP_DEG)
         out.append((xw, zw - t_board - PAD_T - PAD_GAP))
@@ -87,7 +87,7 @@ def stop_wedge_dims(z_hinge, t_board):
 
 
 def build_stop_wedge(length, h0, h1, name="mtc180_stop_wedge"):
-    # Flat base on the board; top face tilted so both rail edges land flat on the stick-on foam pad.
+    # Flat base on the board; top face tilted so both rail crests land flat on the stick-on foam pad.
     blk = extrude(
         sketch(XZ.offset(-STOP_W / 2.0), name=name + "_sk").polygon([(0.0, 0.0), (length, 0.0), (length, h1), (0.0, h0)]),
         STOP_W, name=name + "_blk",

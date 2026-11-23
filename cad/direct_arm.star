@@ -14,8 +14,13 @@ load("bail_coupler.star", "X_MIN", "X_M4", "M4_YS", "Z_WIRE")
 
 BALL_R = 21.335
 L_TIP = 200.0        # rail tip (ball leaves here)
-RAIL_HALF_IN = 6.0   # ball rides on the two inner top edges, 12 mm apart
+RAIL_HALF_IN = 6.0   # inner faces of the two rails (the backstop sits between them)
 RAIL_T = 2.0
+# The ball rides on a flat face on top of each rail, tilted to lie tangent to the ball, so a dimple at the
+# contact point bears on a 3 mm wide face instead of dropping over a sharp edge. rail_top() is the contact line.
+RAIL_CONTACT = 7.44  # contact half-spacing (mid-face)
+FACE_HALF = 1.5      # face half-width, measured along the face
+FACE_TILT = 20.41    # asin(RAIL_CONTACT / BALL_R), deg
 FLOOR_T = 2.2
 FOOT_T = 3.0
 BOSS_H = 5.5         # M4 x 10 through washer + 4.0 mm coupler shelf leaves 5 mm of thread in the arm
@@ -25,7 +30,7 @@ HZ_ROOT = 16.0       # rail-top height at X_RISE1
 HZ_TIP = 6.0         # rail-top height at the tip
 X_RISE0 = 47.0
 X_RISE1 = 57.0
-RIDE_H = 20.47       # ball centre above the rail edges: sqrt(BALL_R^2 - RAIL_HALF_IN^2)
+RIDE_H = 19.995      # ball centre above the contact line: sqrt(BALL_R^2 - RAIL_CONTACT^2)
 TONGUE_X1 = 209.0    # sear tongue end
 TONGUE_T = 3.2
 X_LATCH = 205.5      # sear contact station on the tongue
@@ -40,12 +45,17 @@ BLOCK_HOLE_OFF = 3.5  # pilot is 3.5 mm from one face and 8.5 mm from the other:
 
 
 def rail_top(x):
-    """Rail-top height (part Z) at radial station x."""
+    """Height (part Z) of the ball contact line on the rail faces at radial station x."""
     if x <= X_RISE0:
         return HZ_FOOT
     if x <= X_RISE1:
         return HZ_FOOT + (HZ_ROOT - HZ_FOOT) * (x - X_RISE0) / (X_RISE1 - X_RISE0)
     return HZ_ROOT + (HZ_TIP - HZ_ROOT) * (x - X_RISE1) / (L_TIP - X_RISE1)
+
+
+def rail_crest(x):
+    """Highest point of the rail head (outer end of the contact face) at station x: what lands on the stop pad."""
+    return rail_top(x) + FACE_HALF * math.sin(FACE_TILT)
 
 
 def ball_start_x(peg_index, flipped=False):
@@ -68,9 +78,31 @@ def build_direct_arm(name="mtc180_direct_arm", layer=None):
     tongue = box(TONGUE_X1 - L_TIP + 1.0, 12.0, TONGUE_T, at=(L_TIP - 1.0, -6.0, 0.0), name=name + "_tongue")
     ridge_pts = [(X_LATCH + RIDGE_R * math.cos(a), TONGUE_T - 0.01 + RIDGE_R * math.sin(a)) for a in range(0, 181, 20)]
     ridge = extrude(sketch(XZ.offset(-6.0), name=name + "_ridge_sk").polygon(ridge_pts), 12.0, name=name + "_ridge")
-    web_pts = [(X_MIN, 0.0), (L_TIP, 0.0), (L_TIP, HZ_TIP), (X_RISE1, HZ_ROOT), (X_RISE0, HZ_FOOT), (X_MIN, HZ_FOOT)]
-    web_a = extrude(sketch(XZ.offset(-(RAIL_HALF_IN + RAIL_T)), name=name + "_wa_sk").polygon(web_pts), RAIL_T, name=name + "_web_a")
-    web_b = extrude(sketch(XZ.offset(RAIL_HALF_IN), name=name + "_wb_sk").polygon(web_pts), RAIL_T, name=name + "_web_b")
+    # Rails: lofted between stations so the tangent contact face follows the rail-top line exactly.
+    tilt = math.tan(FACE_TILT)
+    y_in = RAIL_HALF_IN                                   # face starts at the rail's inner wall
+    y_out = RAIL_CONTACT + FACE_HALF * math.cos(FACE_TILT)
+    y_web, y_lip = RAIL_HALF_IN + RAIL_T, y_out + 1.3     # 2 mm web; the head flares outward on a 35-deg-from-vertical underside
+
+    def rail_section(x, sgn, tag, head):
+        zc = rail_top(x)
+        z_in, z_out = zc - (RAIL_CONTACT - y_in) * tilt, zc + (y_out - RAIL_CONTACT) * tilt
+        if head:
+            prof = [(y_in, 0.0), (y_web, 0.0), (y_web, z_out - 1.8 - 1.4 * (y_lip - y_web)), (y_lip, z_out - 1.8), (y_lip, z_out), (y_out, z_out), (y_in, z_in)]
+        else:
+            prof = [(y_in, 0.0), (y_web, 0.0), (y_web, z_in), (y_in, z_in)]
+        return sketch(YZ.offset(x), name="%s_rs_%s" % (name, tag)).polygon([(sgn * y, z) for y, z in prof])
+
+    # The ball only ever rides outboard of X_RISE1, so the flared head is on that span alone; the foot and the
+    # steep rise keep a plain flat-topped 2 mm web level with the face's inner edge.
+    spans = [(X_MIN, X_RISE0, False), (X_RISE0, X_RISE1, False), (X_RISE1, L_TIP, True)]
+    rails = []
+    for sgn, side in [(-1.0, "a"), (1.0, "b")]:
+        for i, (xa, xb, head) in enumerate(spans):
+            rails.append(loft(
+                [rail_section(xa, sgn, "%s%d0" % (side, i), head), rail_section(xb, sgn, "%s%d1" % (side, i), head)],
+                ruled=True, name="%s_rail_%s%d" % (name, side, i),
+            ))
     bosses = [cylinder(5.0, BOSS_H, at=(X_M4, y_m, 0.0), name=name + "_boss_" + str(i)) for i, y_m in enumerate(M4_YS)]
 
     cutters = [cylinder(1.75, BOSS_H + 0.4, at=(X_M4, y_m, -0.2), name=name + "_pilot_" + str(i)) for i, y_m in enumerate(M4_YS)]
@@ -80,7 +112,7 @@ def build_direct_arm(name="mtc180_direct_arm", layer=None):
         cutters.append(cylinder(2.15, FLOOR_T + 0.4, at=(PEG_X0 + PEG_PITCH * k, 0.0, -0.2), name=name + "_peg_" + str(k)))
 
     arm = subtract(
-        [union([foot, floor, gusset, tongue, ridge, web_a, web_b] + bosses, kernel=kernel.mesh, name=name + "_u")] + cutters,
+        [union([foot, floor, gusset, tongue, ridge] + rails + bosses, kernel=kernel.mesh, name=name + "_u")] + cutters,
         kernel=kernel.mesh, name=name,
     )
     if layer != None:

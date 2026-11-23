@@ -1,7 +1,7 @@
 """Launch model for the MTC-180 direct-drive rail arm (cad/direct_arm.star).
 
 Two degrees of freedom: bail/arm travel phi and ball distance s along the straight rail.
-The arm is rigid; the ball either rolls without slipping on the two rail edges or slides
+The arm is rigid; the ball either rolls without slipping on the two rail faces or slides
 without friction (the two limits of what the real ball can do). Spring torque falls linearly
 from the cocked value to `ratio` times that at rest; total spring energy over 180 deg is `E`.
 
@@ -16,7 +16,7 @@ from scipy.integrate import solve_ivp
 G = 9.81
 M_BALL = 0.04593
 A = 0.021335
-RIDE_H = float(np.sqrt(A * A - 0.006 ** 2))   # ball centre above the rail edges (12 mm apart)
+RIDE_H = float(np.sqrt(A * A - 0.00744 ** 2))   # ball centre above the contact lines on the rail faces (14.88 mm apart)
 Z_WIRE = 0.00295
 # Geometry copied from cad/direct_arm.star (metres)
 L_TIP, X_RISE1, HZ_ROOT, HZ_TIP = 0.200, 0.057, 0.016, 0.006
@@ -26,7 +26,7 @@ BLOCK_LEN, BLOCK_HOLE_OFF, BLOCK_TOP = 0.012, 0.0035, 0.0200
 TH_COCK, TH_STOP = np.radians(173.0), np.radians(14.0)
 Z_HINGE = 0.0295                                # hinge axis above the floor
 # Rotating mass about the hinge: printed arm (solid PETG, from the exported STL) + coupler + bails + 6 screws + backstop
-I_ARM, MX_ARM = 2.63e-4, 2.37e-3
+I_ARM, MX_ARM = 3.08e-4, 2.68e-3
 I_FIXED, MX_FIXED = 0.40e-4 + 0.08e-4 + 0.11e-4, 0.016 * 0.042 + 0.009 * 0.035
 M_BLOCK = 0.0057
 

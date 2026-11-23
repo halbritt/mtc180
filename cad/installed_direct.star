@@ -20,10 +20,10 @@ T_BOARD = 18.0
 ZH = T_BOARD + 8.0 + 3.50     # hinge axis above the floor
 COCK_DEG = 173.0
 # Rolling solution for hole 1A: arm angle (deg) -> ball travel along the rail (mm)
-SIM_TH = [173.0, 172.1, 169.2, 164.7, 158.3, 150.8, 142.0, 132.8, 123.1, 113.8, 104.6, 96.3, 88.5]
-SIM_S = [0.0, 0.6, 2.5, 5.6, 10.5, 16.8, 25.4, 35.7, 48.7, 63.3, 80.7, 99.4, 120.5]
-REL_SPEED = 5890.0            # mm/s at release
-REL_ELEV = 35.1               # deg above horizontal
+SIM_TH = [173.0, 172.1, 169.4, 164.7, 158.6, 150.8, 142.2, 132.9, 123.0, 113.4, 103.9, 95.4, 87.5]
+SIM_S = [0.0, 0.6, 2.3, 5.5, 10.1, 16.5, 24.7, 34.9, 47.8, 62.5, 80.1, 99.1, 120.0]
+REL_SPEED = 5860.0            # mm/s at release
+REL_ELEV = 33.5               # deg above horizontal
 
 sweep_t = math.clamp(stroke, 0.0, 1.0)
 theta = COCK_DEG + (STOP_DEG - COCK_DEG) * sweep_t
