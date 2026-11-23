@@ -35,7 +35,7 @@ A second, simpler build that shares the same base, flat traps and `mtc180_bail_c
 - **Loading:** cock the arm back flat (173°), swing the hook sear over the tongue ridge, then drop the ball on the rails; they slope 3° toward the hinge when cocked, so the ball seats itself against the backstop. Cocked ball bottom is about 55 mm (2.2") off the floor, inside the 3" rule.
 - **Trigger (`cad/direct_trigger.star`):** a C-hook on an `M4` bolt in a clevis bracket screwed to the base under the arm tip. Latch load is about 4.5 N and passes almost through the pivot; pull the string rearward to fire.
 - **Stop:** after the ball leaves, the bare arm keeps accelerating and reaches the stop with about 0.9 J (tip speed around 14 m/s). It lands at 14° on a printed wedge carrying a **10 mm soft foam pad** near the arm's centre of percussion. Keep fingers out of the arc.
-- **Parts:** `exports/mtc180_direct_arm_h2s.3mf` (arm, 23.7 cm³) and `exports/mtc180_direct_kit_h2s.3mf` (backstop, hook, bracket, stop wedge, 26.7 cm³), plus the existing bail coupler. Extra hardware: `6× M4 × 10` (coupler + arm), `1× M4 × 10` (backstop), `1× M4 × 25` bolt + nut (sear pivot), `6×` wood screws.
+- **Parts:** `exports/direct/mtc180_direct_arm_h2s.3mf` (arm, 23.7 cm³) and `exports/direct/mtc180_direct_kit_h2s.3mf` (backstop, hook, bracket, stop wedge, 26.7 cm³), plus the existing bail coupler. Extra hardware: `6× M4 × 10` (coupler + arm), `1× M4 × 10` (backstop), `1× M4 × 25` bolt + nut (sear pivot), `6×` wood screws.
 - **Checks:** `cad/print_direct_arm.star`, `cad/print_direct_kit.star` and `cad/installed_direct.star` (10-pose rubric, spring-clearance, sear, stop and ball-path sweep) run under `mise run test`.
 
 ## Repository Layout & Verification Commands
