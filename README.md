@@ -12,12 +12,39 @@ Parametric [Cadpole](https://github.com/halbritt/cadpole) CAD and [CalculiX 2.23
 4. **Zero Rubber Bands — 6-Notch Range Quadrant + Gravity Ratchet Sear (`Design #6`, Day 2 Accuracy):** A counterweighted 1-piece PETG sear pawl (`cad/stanchion_trigger.star`) pivots on an `M4` bolt with **gravity alone** tipping its tooth into **6 calibrated range notches** (`Notch 6 = ~6.4 m` full cock for Day 1 max distance; `Notches 5..1 = ~5.0, 4.1, 3.2, 2.5, 1.7 m` for Day 2 two-target accuracy), tripped from behind by a braided pull-string (`~2.2 N` pull while holding the rear of the board flush to the floor).
 5. **100% `M4` Hardware (`Zero M3 Needed`):** Uses `M4` washers + self-tapping `M4 × 6–8 mm` screws on the 3-bail coupler, `4×` `M4 × 45–50 mm` bolts/pins through the stanchion bores (arm pivot, cord roller, sear pawl, and 3-angle stop sleeve), and `#6` / `M4` wood screws into the `3/4"` plywood board.
 
+## Alternative: Direct-Drive Rail Arm (arm bolted straight to the three traps)
+
+![Direct-drive launch: hook sear released, ball rolls out along the rails and leaves the tip, bare arm lands on the foam stop](docs/images/mtc180_direct_launch.gif)
+
+A second, simpler build that shares the same base, flat traps and `mtc180_bail_coupler`: instead of the cord, cam, pivot and stanchions, a 30 g rail arm (`cad/direct_arm.star`) bolts directly onto the coupler's flat driven face with the same six `M4` screws (use `M4 × 10` instead of `× 6–8`).
+
+**Why it is not a cup.** With the traps flat on a floor-flush base the arm can only swing in the half-plane above the floor. A ball held rigidly on such an arm is moving *upward* only while the arm is behind vertical, so it must be released in roughly the first 60° of the 166° stroke; in the model that tops out near 2.3 m. This arm instead lets the ball **roll outward along two rails** while the bails swing. The outward speed adds to the tangential speed, so the ball leaves the tip heading about 35° upward when the arm is vertical, after about 85° of stroke. That is still only about 0.8 J of the 2.1 J the cam design delivers, so expect roughly 60% of the cam design's reported `~5.9 m` carry.
+
+| Backstop hole | Ball start radius | Release (arm angle / elevation / speed) | Model carry (rolling) | Carry if the ball slides | Carry at −20% / +20% spring energy |
+| --- | --- | --- | --- | --- | --- |
+| **1A (max — Day 1)** | `80 mm` | `88° / 35° / 5.9 m/s` | **`3.7 m`** | `3.4 m` | `2.9 m` / `4.4 m` |
+| 2A | `91 mm` | `95° / 39° / 5.7 m/s` | `3.5 m` | `3.0 m` | `2.8 m` / `4.2 m` |
+| 3A | `101 mm` | `101° / 43° / 5.5 m/s` | `3.3 m` | `2.6 m` | `2.6 m` / `3.9 m` |
+| 5A | `122 mm` | `113° / 50° / 5.0 m/s` | `2.7 m` | `1.8 m` | `2.1 m` / `3.2 m` |
+| 7A | `143 mm` | `125° / 57° / 4.5 m/s` | `1.9 m` | `1.2 m` | `1.5 m` / `2.3 m` |
+| 9A | `164 mm` | `138° / 65° / 3.9 m/s` | `1.1 m` | `0.6 m` | `0.9 m` / `1.4 m` |
+
+*(`mise run sim` prints all 20 positions. These are model numbers: the spring energy (`2.12 J` for three traps) and its torque curve are assumed, not measured, and nothing here has been printed or fired. Calibrate the table on the real machine before Day 2.)*
+
+- **Day 2 adjustment:** the ball rests against a small backstop block between the rails. Ten holes at 10 mm pitch, and the block's off-centre screw gives 5 mm half-steps when turned round ("A"/"B"), so each step moves the landing point by about 0.1–0.2 m. Moving the ball outward shortens and steepens the throw.
+- **Loading:** cock the arm back flat (173°), swing the hook sear over the tongue ridge, then drop the ball on the rails; they slope 3° toward the hinge when cocked, so the ball seats itself against the backstop. Cocked ball bottom is about 55 mm (2.2") off the floor, inside the 3" rule.
+- **Trigger (`cad/direct_trigger.star`):** a C-hook on an `M4` bolt in a clevis bracket screwed to the base under the arm tip. Latch load is about 4.5 N and passes almost through the pivot; pull the string rearward to fire.
+- **Stop:** after the ball leaves, the bare arm keeps accelerating and reaches the stop with about 0.9 J (tip speed around 14 m/s). It lands at 14° on a printed wedge carrying a **10 mm soft foam pad** near the arm's centre of percussion. Keep fingers out of the arc.
+- **Parts:** `exports/mtc180_direct_arm_h2s.3mf` (arm, 23.7 cm³) and `exports/mtc180_direct_kit_h2s.3mf` (backstop, hook, bracket, stop wedge, 26.7 cm³), plus the existing bail coupler. Extra hardware: `6× M4 × 10` (coupler + arm), `1× M4 × 10` (backstop), `1× M4 × 25` bolt + nut (sear pivot), `6×` wood screws.
+- **Checks:** `cad/print_direct_arm.star`, `cad/print_direct_kit.star` and `cad/installed_direct.star` (10-pose rubric, spring-clearance, sear, stop and ball-path sweep) run under `mise run test`.
+
 ## Repository Layout & Verification Commands
 
 - `cad/bail_coupler.star` & `cad/print_bail_coupler.star` — Spring-cleared (`X >= 28.5 mm`) driven-side 3-bail coupler (`16.28 cm³` CAD, `6× M4` washer locks).
 - `cad/throwing_arm.star` & `cad/print_throwing_arm.star` — Monolithic throwing arm (`R = 98 mm` V-cam + `6-notch` sear quadrant + self-centering `45°` V-cup + centrifugal backstop).
 - `cad/stanchion_trigger.star` & `cad/print_stanchion_kit.star` — Left/right mirrored A-frame stanchions (`34°/42°/50°` CoP stop holes), stop sleeve, `M4` V-roller, and counterweighted gravity sear pawl.
 - `cad/installed_floorflush.star` — Full 8-pose rubric & `IMG_4479` spring-clearance test suite + 64-frame launch animation.
+- `cad/direct_arm.star`, `cad/direct_trigger.star`, `cad/installed_direct.star`, `analysis/direct_arm_sim.py` — Direct-drive rail-arm alternative (arm bolted to the coupler) and its launch model.
 - `fea/run_floorflush_fea.py` — CalculiX 2.23 `C3D8I` two-phase FDM (`PETG_SHELL` + `PETG_GYROID15`) solver.
 
 ```sh

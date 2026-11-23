@@ -5,6 +5,9 @@ cadpole test cad/print_bail_coupler.star
 cadpole test cad/print_throwing_arm.star
 cadpole test cad/print_stanchion_kit.star
 cadpole test cad/installed_floorflush.star
+cadpole test cad/print_direct_arm.star
+cadpole test cad/print_direct_kit.star
+cadpole test cad/installed_direct.star
 """
 
 [tasks.export]
@@ -14,6 +17,8 @@ mkdir -p exports
 cadpole export --run-exports --out-dir exports cad/print_bail_coupler.star
 cadpole export --run-exports --out-dir exports cad/print_throwing_arm.star
 cadpole export --run-exports --out-dir exports cad/print_stanchion_kit.star
+cadpole export --run-exports --out-dir exports cad/print_direct_arm.star
+cadpole export --run-exports --out-dir exports cad/print_direct_kit.star
 """
 
 [tasks.animate]
@@ -22,8 +27,14 @@ run = """
 mkdir -p exports docs/images
 cadpole animate cad/installed_floorflush.star --frames 64 --size 1080x780 --view product --lighting product --backdrop studio --no-grid -o exports/mtc180_floorflush_launch.gif
 uv run --with pillow --with numpy python3 scripts/crop_gif.py exports/mtc180_floorflush_launch.gif docs/images/mtc180_floorflush_launch.gif
+cadpole animate cad/installed_direct.star --frames 64 --size 1080x780 --view product --lighting product --backdrop studio --no-grid -o exports/mtc180_direct_launch.gif
+uv run --with pillow --with numpy python3 scripts/crop_gif.py exports/mtc180_direct_launch.gif docs/images/mtc180_direct_launch.gif
 """
 
 [tasks.fea]
 description = "Run CalculiX 2.23 C3D8I two-phase FDM PETG (solid shell + 15% gyroid) FEA on v5 bail coupler & throwing arm"
 run = "uv run --with numpy --with scipy --with trimesh python3 fea/run_floorflush_fea.py"
+
+[tasks.sim]
+description = "Run the 2-DOF launch model (arm swing + ball rolling on the rails) for every backstop position of the direct-drive arm"
+run = "uv run --with numpy --with scipy python3 analysis/direct_arm_sim.py"
