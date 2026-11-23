@@ -8,7 +8,9 @@ ZR = 39.0
 XS = -106.0
 ZS = 33.0
 T_BOARD = 18.0
-STOP_HOLES = {34: (-102.3, 139.0), 42: (-114.0, 135.9), 50: (-125.1, 131.2)}
+# Stop-pin holes by launch elevation.  There is no 34-deg hole: the cord horn reaches dead centre at an arm
+# angle of 50 deg (40 deg elevation), so a later stop would let the arm pull the bails back up.
+STOP_HOLES = {42: (-114.0, 135.9), 50: (-125.1, 131.2)}
 
 
 def _teardrop_yz(sk, cy, cz, r):

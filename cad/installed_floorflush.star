@@ -4,31 +4,31 @@
 #   2. All 3 Victor mousetraps lay DEAD FLAT (0.00 deg) right-side up on the floor-flush base; springs unaltered.
 #   3. Exact IMG_4479.jpg black torsion-spring legs (X = 0..25.7 mm) clear the X >= 28.5 mm bail coupler by > 2.0 mm.
 #   4. Cocked golf ball bottom sits at Z = 30.7 mm (1.21" < 3.00" rubric rule) in an open top-loading gravity V-cup.
-#   5. Zero rubber bands: gravity-counterweighted ratchet sear clicks across 6 range notches; tripped by rear pull-string.
+#   5. Drive cord: coupler eye -> under the roller -> cord post on the arm horn (exact kinematics, cad/linkage.star).
+#   6. Zero rubber bands: gravity-counterweighted ratchet sear clicks across 6 range notches; tripped by rear pull-string.
 
 load("bail_coupler.star", "build_bail_coupler", "TRAP_PITCH", "WIRE_HALF_CC", "Z_WIRE", "R_PULL", "X_M4", "M4_YS")
-load("throwing_arm.star", "build_throwing_arm", "L_BALL", "R_CAM_EFF", "W_ARM")
+load("throwing_arm.star", "build_throwing_arm", "L_BALL", "W_ARM", "HORN_R", "HORN_A", "POST_Z", "POST_H")
+load("linkage.star", "XH", "R_ROLL_EFF", "TH_REST", "TH_COCK_FULL", "cord_path", "bail_angle")
 load("stanchion_trigger.star", "build_stanchion_cheek", "build_trigger_and_rollers", "XP", "ZP", "XR", "ZR", "XS", "ZS", "T_BOARD", "STOP_HOLES")
 
-launch_deg = param("launch_deg", 42, min=34, max=50, step=8, doc="Pin-indexed launch elevation hole (34, 42, or 50 deg)")
-notch = param("notch", 6, min=1, max=6, step=1, doc="Ratchet sear range notch (6 = Full Cock ~6.4 m; 5..1 = 5.0..1.7 m)")
+launch_deg = param("launch_deg", 42, min=42, max=50, step=8, doc="Pin-indexed launch elevation hole (42 or 50 deg)")
+notch = param("notch", 6, min=1, max=6, step=1, doc="Ratchet sear range notch (6 = full cock; see `mise run camsim` for the range table)")
 stroke = param("stroke", -0.20, min=-0.20, max=1.40, step=0.02)
 
-XH = 112.0
 ZH = T_BOARD + 8.0 + 3.50
-R_ROLL = 6.0
 NOTCH_LIST = [35.80, 28.00, 19.60, 11.20, 2.20, -6.74]
 psi_cock = NOTCH_LIST[notch - 1]
 psi_stop = 90.0 - launch_deg
 sweep_t = math.clamp(stroke, 0.0, 1.0)
 psi_arm = psi_cock + (psi_stop - psi_cock) * sweep_t
 
-# Exact kinematic coupling: bail angle theta_bail from taut braided cord around (XR, ZR - R_ROLL)
-s_end = math.sqrt((XH + R_PULL * math.cos(7.0) - XR) * (XH + R_PULL * math.cos(7.0) - XR) + (ZH + R_PULL * math.sin(7.0) - (ZR - R_ROLL)) * (ZH + R_PULL * math.sin(7.0) - (ZR - R_ROLL)))
-rem_rad = (psi_stop - psi_arm) * 3.14159265 / 180.0
-s_cur = s_end - R_CAM_EFF * rem_rad
-# Smooth inverse mapping tb(s_cur) across [7, 173] deg
-theta_bail = 7.0 + 166.0 * math.clamp((s_end - s_cur) / 92.20, 0.0, 1.0)
+# Exact cord kinematics (cad/linkage.star): the cord is tied so notch 6 holds the bails at TH_COCK_FULL;
+# for every arm angle the bail angle is the one that keeps that fixed length of cord taut.
+LINK = {"zh": ZH, "r_pull": R_PULL, "xp": XP, "zp": ZP, "xr": XR, "zr": ZR, "horn_r": HORN_R, "horn_a": HORN_A}
+CORD_LEN = cord_path(TH_COCK_FULL, NOTCH_LIST[5], LINK)[0]
+theta_bail = bail_angle(psi_arm, CORD_LEN, LINK)
+_, cord_eye, cord_ab, cord_post, cord_ah = cord_path(theta_bail, psi_arm, LINK)
 
 base_board = box(450.0, 204.0, T_BOARD, at=(-275.0, -102.0, 0.0), name="floor_flush_base_board")
 base_board.material(color="#c79c6b", roughness=0.48)
@@ -75,6 +75,20 @@ arm_posed = (
     .translate((XP, 0.0, ZP), name="mtc180_throwing_arm_posed")
 )
 
+# M4 x 8 screw + fender washer on the horn's cord post (the cord loop turns on the printed collar under the washer)
+_tx, _tz = HORN_R * math.cos(HORN_A), HORN_R * math.sin(HORN_A)
+post_screw = (
+    union([
+        cylinder(6.0, 0.8, at=(_tx, _tz, POST_Z + POST_H), name="post_washer"),
+        cylinder(3.5, 3.0, at=(_tx, _tz, POST_Z + POST_H + 0.8), name="post_head"),
+    ], kernel=kernel.mesh, name="post_screw_raw")
+    .translate((0.0, 0.0, -W_ARM / 2.0))
+    .rotate(90.0, axis=(1.0, 0.0, 0.0))
+    .rotate(psi_arm, axis=(0.0, 1.0, 0.0))
+    .translate((XP, 0.0, ZP), name="cord_post_screw_posed")
+)
+post_screw.material(preset=preset.steel, color="#b2bec3")
+
 # Right (-Y) and Left (+Y) Stanchion Cheeks with flat PEI faces at Y = +-8.0 mm and flanges outboard!
 st_r = build_stanchion_cheek(side=1, name="str_raw").rotate(90.0, axis=(1.0, 0.0, 0.0)).translate((0.0, -8.0, T_BOARD + 0.01), name="stanchion_right_posed")
 st_l = build_stanchion_cheek(side=-1, name="stl_raw").rotate(90.0, axis=(1.0, 0.0, 0.0)).rotate(180.0, axis=(0.0, 0.0, 1.0)).translate((0.0, 8.0, T_BOARD + 0.01), name="stanchion_left_posed")
@@ -91,11 +105,13 @@ pull_prog = math.clamp((stroke + 0.20) / 0.20, 0.0, 1.0) if stroke <= 0.0 else 1
 pawl_deg = pull_prog * 21.0
 pawl_posed = pawl_raw.translate((0.0, 0.0, -6.0)).rotate(90.0, axis=(1.0, 0.0, 0.0)).rotate(pawl_deg, axis=(0.0, 1.0, 0.0)).translate((XS, 0.0, ZS), name="gravity_sear_posed")
 
-# Braided Drive Cord (2 straight taut spans meeting under M4 Roller) + Rear Trigger Pull-String
-bx_c = XH + R_PULL * math.cos(theta_bail)
-bz_c = ZH + R_PULL * math.sin(theta_bail)
-dc1 = sweep_along(sketch(YZ.offset(bx_c), name="dc1_sk").circle(0.95, center=(0.0, bz_c)), curve((bx_c, 0.0, bz_c), name="dp1").line((XR, 0.0, ZR - R_ROLL)), name="drive_cord_lower")
-dc2 = sweep_along(sketch(YZ.offset(XR), name="dc2_sk").circle(0.95, center=(0.0, ZR - R_ROLL)), curve((XR, 0.0, ZR - R_ROLL), name="dp2").line((XP + 38.0, 0.0, ZP + 88.5)), name="drive_cord_upper")
+# Braided drive cord: eye -> tangent under the roller, roller -> horn post (the wrap on the roller is not drawn)
+bx_c, bz_c = cord_eye
+t1x, t1z = XR + R_ROLL_EFF * math.cos(cord_ab), ZR + R_ROLL_EFF * math.sin(cord_ab)
+t2x, t2z = XR + R_ROLL_EFF * math.cos(cord_ah), ZR + R_ROLL_EFF * math.sin(cord_ah)
+hx_c, hz_c = cord_post
+dc1 = sweep_along(sketch(YZ.offset(bx_c), name="dc1_sk").circle(0.95, center=(0.0, bz_c)), curve((bx_c, 0.0, bz_c), name="dp1").line((t1x, 0.0, t1z)), name="drive_cord_lower")
+dc2 = sweep_along(sketch(YZ.offset(t2x), name="dc2_sk").circle(0.95, center=(0.0, t2z)), curve((t2x, 0.0, t2z), name="dp2").line((hx_c, 0.0, hz_c)), name="drive_cord_upper")
 for dc in [dc1, dc2]:
     dc.material(color="#00cec9", roughness=0.4)
 
@@ -113,7 +129,7 @@ pull_handle.material(preset=preset.petg_glossy, color="#d63031")
 bx0 = XP + (-L_BALL - 1.30) * math.cos(psi_arm) + 1.30 * math.sin(psi_arm)
 bz0 = ZP + (L_BALL + 1.30) * math.sin(psi_arm) + 1.30 * math.cos(psi_arm)
 ft = math.clamp((stroke - 1.0) * 0.12, 0.0, 0.05)
-v0 = 7820.0
+v0 = 6720.0 if launch_deg == 42 else 5760.0   # mm/s at notch 6, from analysis/cam_launch_sim.py
 ball = sphere(21.335, center=(bx0 + v0 * math.cos(launch_deg) * ft, 0.0, bz0 + v0 * math.sin(launch_deg) * ft - 0.5 * 9806.65 * ft * ft), name="regulation_golf_ball")
 ball.material(preset=preset.abs, color="#f5f6fa", roughness=0.24, texture="dots", scale=4.2)
 
@@ -128,6 +144,19 @@ animation("floor_flush_catapult_launch", [
 def verify_floor_flush_rubric_and_clearances():
     assert_solid(coupler_posed)
     assert_solid(arm_posed)
+    # Linkage: full cock holds the bails at TH_COCK_FULL, the cord stays taut through the stroke, and the horn is
+    # still short of dead centre one degree past the stop (so the cord never pulls the bails back up).
+    if stroke <= 0.0 and notch == 6:
+        assert_true(abs(theta_bail - TH_COCK_FULL) < 0.2, msg="Full-cock bail angle %s, expected %s" % (theta_bail, TH_COCK_FULL))
+    assert_true(theta_bail > TH_REST + 5.0, msg="Cord goes slack at stroke=%s (bails on the pad)" % stroke)
+    assert_true(cord_path(TH_REST, psi_stop + 1.0, LINK)[0] < cord_path(TH_REST, psi_stop, LINK)[0], msg="Horn passes dead centre before the stop")
+    for cord in [dc1, dc2]:
+        for obs in [arm_posed, coupler_posed, base_board, st_r, st_l, stop_rubber] + traps_wood + springs_fixed:
+            dco = distance(cord, obs)
+            if not ((cord.name == "drive_cord_lower" and obs.name == "mtc180_bail_coupler_posed") or (cord.name == "drive_cord_upper" and obs.name == "mtc180_throwing_arm_posed")):
+                assert_true(not dco.overlap, msg="%s runs through %s at stroke=%s" % (cord.name, obs.name, stroke))
+    assert_true(not distance(post_screw, roller_posed).overlap and distance(post_screw, roller_posed).distance > 1.5, msg="Cord post screw too close to the roller at stroke=%s" % stroke)
+    assert_true(distance(arm_posed, roller_posed).distance > 1.5, msg="Horn tip too close to the roller at stroke=%s" % stroke)
     # Rubric Design #4 & #5: base <= 25.4 mm (1"), inside 609.6 x 609.6 mm (2'x2'), traps flush on base, ball passes < 76.2 mm (3") of ground!
     assert_true(T_BOARD <= 25.4, msg="Base thicker than 1 inch")
     if stroke <= 0.0:

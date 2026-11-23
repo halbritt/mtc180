@@ -1,15 +1,15 @@
-# Standalone Bambu Lab H2S Print & Multi-Nozzle Test for MTC-180 v5 Monolithic Throwing Arm + Cam + 6-Notch Quadrant
+# Standalone Bambu Lab H2S Print & Multi-Nozzle Test for MTC-180 v5 Monolithic Throwing Arm + Cord Horn + 6-Notch Quadrant
 load("throwing_arm.star", "build_throwing_arm")
 
 arm = build_throwing_arm(name="mtc180_throwing_arm")
 
 export(arm, "mtc180_throwing_arm.stl", tolerance=0.01)
-export(arm, "mtc180_throwing_arm_h2s.3mf", flavor=flavor.bambu, plate="MTC-180 v5 Throwing Arm + Cam + 6-Notch Quadrant (H2S)", name="mtc180_throwing_arm", printer="bambu_h2s")
+export(arm, "mtc180_throwing_arm_h2s.3mf", flavor=flavor.bambu, plate="MTC-180 v5 Throwing Arm + Cord Horn + 6-Notch Quadrant (H2S)", name="mtc180_throwing_arm", printer="bambu_h2s")
 plate_images("mtc180_throwing_arm_h2s.3mf", background="studio")
 
 dwg = drawing(
     arm, view="three-view", sheet="A3", hidden="dashed", units="mm",
-    title="MTC-180 v5 Monolithic Throwing Arm (R=98mm Cam + 6-Notch Sear Quadrant + Self-Centering Open V-Cup)",
+    title="MTC-180 v5 Monolithic Throwing Arm (Cord Horn + 6-Notch Sear Quadrant + Self-Centering Open V-Cup)",
     name="throwing_arm_sheet",
 )
 export_pdf(dwg, "mtc180_throwing_arm_drawing.pdf")

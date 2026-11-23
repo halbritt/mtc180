@@ -1,5 +1,5 @@
 [tasks.test]
-description = "Run Cadpole 3-nozzle Bambu H2S printability, IMG_4479 spring clearance, and 8-pose floor-flush rubric tests"
+description = "Run Cadpole 3-nozzle Bambu H2S printability, IMG_4479 spring clearance, and 8-pose floor-flush rubric and cord-path tests"
 run = """
 cadpole test cad/print_bail_coupler.star
 cadpole test cad/print_throwing_arm.star
@@ -38,3 +38,7 @@ run = "uv run --with numpy --with scipy --with trimesh python3 fea/run_floorflus
 [tasks.sim]
 description = "Run the 2-DOF launch model (arm swing + ball rolling on the rails) for every backstop position of the direct-drive arm"
 run = "uv run --with numpy --with scipy python3 analysis/direct_arm_sim.py"
+
+[tasks.camsim]
+description = "Run the cord-linkage launch model (exact cord path, taut/slack cord) and print the notch range table for the v5 arm"
+run = "uv run --with numpy python3 analysis/cam_launch_sim.py"
