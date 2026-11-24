@@ -1,4 +1,4 @@
-# MTC-180 (`v5` Floor-Flush) — Rubric-Compliant 3-Mousetrap Cord-Driven Golf-Ball Catapult
+# MTC-180 (`v5.1` Floor-Flush) — Rubric-Compliant 3-Mousetrap Cord-Driven Golf-Ball Catapult
 
 ![Complete Floor-Flush Launch Sequence: Rear Pull-String -> Gravity Sear -> Bail Stroke -> 42° CoP Stop & Golf Ball Trajectory](docs/images/mtc180_floorflush_launch.gif)
 
@@ -19,7 +19,7 @@ Parametric [Cadpole](https://github.com/halbritt/cadpole) CAD and [CalculiX 2.23
 
 A second, simpler build that shares the same base, flat traps and `mtc180_bail_coupler`: instead of the cord, horn arm, pivot and stanchions, a 32 g rail arm (`cad/direct_arm.star`) bolts directly onto the coupler's flat driven face with the same six `M4` screws (use `M4 × 10` instead of `× 6–8`).
 
-**Why it is not a cup.** With the traps flat on a floor-flush base the arm can only swing in the half-plane above the floor. A ball held rigidly on such an arm is moving *upward* only while the arm is behind vertical, so it must be released in roughly the first 60° of the 166° stroke; in the model that tops out near 2.3 m. This arm instead lets the ball **roll outward along two rails** while the bails swing. The outward speed adds to the tangential speed, so the ball leaves the tip heading about 34° upward when the arm is vertical, after about 85° of stroke. In the models the ball gets about 0.8 J here against about 1.0 J from the cord-and-horn arm, so expect roughly 75% of that design's `~4.8 m` carry.
+**Why it is not a cup.** With the traps flat on a floor-flush base the arm can only swing in the half-plane above the floor. A ball held rigidly on such an arm is moving *upward* only while the arm is behind vertical, so it must be released in roughly the first 60° of the 166° stroke; in the model that tops out near 2.3 m. This arm instead lets the ball **roll outward along two rails** while the bails swing. The outward speed adds to the tangential speed, so the ball leaves the tip heading about 34° upward when the arm is vertical, after about 85° of stroke. In the models the ball gets about 0.8 J here against about 1.1 J from the cord-and-horn arm, so expect roughly 70% of that design's `~5.1 m` carry.
 
 | Backstop hole | Ball start radius | Release (arm angle / elevation / speed) | Model carry (rolling) | Carry if the ball slides | Carry at −20% / +20% spring energy |
 | --- | --- | --- | --- | --- | --- |
@@ -43,20 +43,21 @@ A second, simpler build that shares the same base, flat traps and `mtc180_bail_c
 ## Repository Layout & Verification Commands
 
 - `cad/bail_coupler.star` & `cad/print_bail_coupler.star` — Spring-cleared (`X >= 28.5 mm`) driven-side 3-bail coupler (`16.28 cm³` CAD, `6× M4` washer locks).
-- `cad/throwing_arm.star` & `cad/print_throwing_arm.star` — Monolithic throwing arm (cord horn with `M4` cord post + `6-notch` sear quadrant + self-centering `45°` V-cup + centrifugal backstop).
-- `cad/stanchion_trigger.star` & `cad/print_stanchion_kit.star` — Left/right mirrored A-frame stanchions (`42°/50°` CoP stop holes), stop sleeve, `M4` V-roller, and counterweighted gravity sear pawl.
+- `cad/throwing_arm.star` & `cad/print_throwing_arm.star` — `12 mm` monolithic throwing arm (through-bolted `M4 × 16` cord horn + `6-notch` sear quadrant + self-centering `45°` V-cup + centrifugal backstop).
+- `cad/stanchion_trigger.star` & `cad/print_stanchion_kit.star` — Left/right mirrored A-frame stanchions (`42°/50°/58°` CoP stop holes), stop sleeve, `M4` V-roller, and counterweighted gravity sear pawl.
 - `cad/linkage.star` — Exact drive-cord kinematics (eye → roller → horn post) shared by the assembly.
-- `cad/installed_floorflush.star` — Full 8-pose rubric, cord-path & `IMG_4479` spring-clearance test suite + 64-frame launch animation.
+- `cad/installed_floorflush.star` — Full 8-pose launch + 6-notch sear, `< 3"` rubric, cord-path & `IMG_4479` spring-clearance test suite + 64-frame launch animation.
 - `analysis/cam_launch_sim.py` — Launch model for the cord linkage (taut/slack cord, bail and arm inertia); prints the range table.
 - `cad/direct_arm.star`, `cad/direct_trigger.star`, `cad/installed_direct.star`, `analysis/direct_arm_sim.py` — Direct-drive rail-arm alternative (arm bolted to the coupler) and its launch model.
 - `fea/run_floorflush_fea.py` — CalculiX 2.23 `C3D8I` two-phase FDM (`PETG_SHELL` + `PETG_GYROID15`) solver.
 
 ```sh
-mise run test       # Run all 11 Cadpole H2S 3-nozzle printability, spring-clearance (>2mm), and rubric checks
-mise run export     # Rebuild exports/*.stl, *.3mf, *.pdf, *.svg
-mise run animate    # Rebuild 64-frame floor-flush animated launch GIF
+mise run test       # Run all 29 Cadpole H2S 3-nozzle printability, 6-notch sear, spring-clearance (>2mm), and rubric checks
+mise run export     # Rebuild exports/*.stl, *.3mf, *.pdf, *.svg (and exports/direct/*)
+mise run animate    # Rebuild both 64-frame floor-flush and direct-drive animated launch GIFs
 mise run fea        # Run CalculiX 2.23 C3D8I two-phase FDM stress & inertia study
 mise run camsim     # Cord-linkage launch model: range table and sensitivities (--cam 96.5 --th-cock 156 = the old cam)
+mise run sim        # Direct-drive 2-DOF rolling/sliding rail launch model across all 20 backstop positions
 ```
 
 ## CalculiX 2.23 `C3D8I` FEA (`v5.1`, `20,821` Coupler + `16,197` Arm Bricks)
@@ -86,11 +87,14 @@ mise run camsim     # Cord-linkage launch model: range table and sensitivities (
 
 ## Bambu Lab H2S Print Plates (PETG, Supports OFF, Arachne ON, 15% Gyroid)
 
+- **Download Bundle (`1k7hhp`):** [`bundle.zip`](https://artifact.harm.org/1k7hhp/_artifact/bundle.zip) · [Browse All Exports](https://artifact.harm.org/1k7hhp/_artifact/) · [Floor-Flush Launch GIF](https://artifact.harm.org/1k7hhp/mtc180_floorflush_launch.gif) · [Direct-Drive Launch GIF](https://artifact.harm.org/1k7hhp/direct/mtc180_direct_launch.gif)
+- **Interactive 3D Viewer (`v5.1`):** [Full Assembly](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/zbhr5x/mtc180_floorflush_assembly_v5_1.glb) · [3-Bail Coupler](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/wvysq5/mtc180_bail_coupler_v5_1.glb) · [`12 mm` Cord-Horn Arm](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/ru6n18/mtc180_throwing_arm_v5_1.glb) · [Stanchions + Sear Kit](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/9dvtq1/mtc180_stanchion_kit_v5_1.glb)
+
 | Plate (`exports/*_h2s.3mf`) | Recommended Nozzle | Layer × Width | PETG Mass | Extrusion Time |
 | --- | --- | --- | --- | --- |
-| **1. `mtc180_bail_coupler` (`16.3 cm³` — Print & Test-Fit First)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~12 g`** | **`~5.5 min`** |
-| **2. `mtc180_throwing_arm` (`84.8 cm³` — 12 mm Truss + Through-Bolted Horn)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` / `3` walls) | **`~49–55 g`** | **`~22 min`** |
-| **3. `mtc180_stanchion_kit` (`309.9 cm³` — 5 Parts, Centered Plate)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~165 g`** | **`~70 min`** |
+| **1. [`mtc180_bail_coupler`](https://artifact.harm.org/1k7hhp/mtc180_bail_coupler_h2s.3mf?download=1) (`16.3 cm³` — Print & Test-Fit First)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~12 g`** | **`~5.5 min`** |
+| **2. [`mtc180_throwing_arm`](https://artifact.harm.org/1k7hhp/mtc180_throwing_arm_h2s.3mf?download=1) (`84.8 cm³` — 12 mm Truss + Through-Bolted Horn)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` / `3` walls) | **`~49–55 g`** | **`~22 min`** |
+| **3. [`mtc180_stanchion_kit`](https://artifact.harm.org/1k7hhp/mtc180_stanchion_kit_h2s.3mf?download=1) (`309.9 cm³` — 5 Parts, Centered Plate)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~165 g`** | **`~70 min`** |
 
 ## Hardware BOM (100% `M4` — Zero `M3`, Zero Rubber Bands)
 
