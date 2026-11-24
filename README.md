@@ -87,14 +87,14 @@ mise run sim        # Direct-drive 2-DOF rolling/sliding rail launch model acros
 
 ## Bambu Lab H2S Print Plates (PETG, Supports OFF, Arachne ON, 15% Gyroid)
 
-- **Download Bundle (`1k7hhp`):** [`bundle.zip`](https://artifact.harm.org/1k7hhp/_artifact/bundle.zip) · [Browse All Exports](https://artifact.harm.org/1k7hhp/_artifact/) · [Floor-Flush Launch GIF](https://artifact.harm.org/1k7hhp/mtc180_floorflush_launch.gif) · [Direct-Drive Launch GIF](https://artifact.harm.org/1k7hhp/direct/mtc180_direct_launch.gif)
+- **Download Bundle (`3t8uyn`):** [`bundle.zip`](https://artifact.harm.org/3t8uyn/_artifact/bundle.zip) · [Browse All Exports](https://artifact.harm.org/3t8uyn/_artifact/) · [Floor-Flush Launch GIF](https://artifact.harm.org/3t8uyn/mtc180_floorflush_launch.gif) · [Direct-Drive Launch GIF](https://artifact.harm.org/3t8uyn/direct/mtc180_direct_launch.gif)
 - **Interactive 3D Viewer (`v5.1`):** [Full Assembly](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/zbhr5x/mtc180_floorflush_assembly_v5_1.glb) · [3-Bail Coupler](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/wvysq5/mtc180_bail_coupler_v5_1.glb) · [`12 mm` Cord-Horn Arm](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/ru6n18/mtc180_throwing_arm_v5_1.glb) · [Stanchions + Sear Kit](https://3dviewer.harm.org/#model=https://3dviewer.harm.org/models/9dvtq1/mtc180_stanchion_kit_v5_1.glb)
 
 | Plate (`exports/*_h2s.3mf`) | Recommended Nozzle | Layer × Width | PETG Mass | Extrusion Time |
 | --- | --- | --- | --- | --- |
-| **1. [`mtc180_bail_coupler`](https://artifact.harm.org/1k7hhp/mtc180_bail_coupler_h2s.3mf?download=1) (`16.3 cm³` — Print & Test-Fit First)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~12 g`** | **`~5.5 min`** |
-| **2. [`mtc180_throwing_arm`](https://artifact.harm.org/1k7hhp/mtc180_throwing_arm_h2s.3mf?download=1) (`84.8 cm³` — 12 mm Truss + Through-Bolted Horn)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` / `3` walls) | **`~49–55 g`** | **`~22 min`** |
-| **3. [`mtc180_stanchion_kit`](https://artifact.harm.org/1k7hhp/mtc180_stanchion_kit_h2s.3mf?download=1) (`309.9 cm³` — 5 Parts, Centered Plate)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~165 g`** | **`~70 min`** |
+| **1. [`mtc180_bail_coupler`](https://artifact.harm.org/3t8uyn/mtc180_bail_coupler_h2s.3mf?download=1) (`16.3 cm³` — Print & Test-Fit First)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~12 g`** | **`~5.5 min`** |
+| **2. [`mtc180_throwing_arm`](https://artifact.harm.org/3t8uyn/mtc180_throwing_arm_h2s.3mf?download=1) (`84.8 cm³` — 12 mm Truss + Through-Bolted Horn)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` / `3` walls) | **`~49–55 g`** | **`~22 min`** |
+| **3. [`mtc180_stanchion_kit`](https://artifact.harm.org/3t8uyn/mtc180_stanchion_kit_h2s.3mf?download=1) (`309.9 cm³` — 5 Parts, Centered Plate)** | `0.6 mm` TC / `0.8 mm` TC | `0.40 × 0.88 mm` (`2` walls) | **`~165 g`** | **`~70 min`** |
 
 ## Hardware BOM (100% `M4` — Zero `M3`, Zero Rubber Bands)
 
