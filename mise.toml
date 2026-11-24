@@ -25,7 +25,7 @@ cadpole export --run-exports --out-dir exports/direct cad/print_direct_kit.star
 description = "Render and tight-crop the 64-frame floor-flush catapult + rear trigger + golf-ball launch animated GIF"
 run = """
 mkdir -p exports exports/direct docs/images
-cadpole animate cad/installed_floorflush.star --frames 64 --size 1080x780 --view product --lighting product --backdrop studio --no-grid -o exports/mtc180_floorflush_launch.gif
+cadpole animate cad/installed_floorflush.star --frames 64 --size 1080x780 --view az=-14,el=10 --lighting product --backdrop studio --no-grid -o exports/mtc180_floorflush_launch.gif
 uv run --with pillow --with numpy python3 scripts/crop_gif.py exports/mtc180_floorflush_launch.gif docs/images/mtc180_floorflush_launch.gif
 cadpole animate cad/installed_direct.star --frames 64 --size 1080x780 --view product --lighting product --backdrop studio --no-grid -o exports/direct/mtc180_direct_launch.gif
 uv run --with pillow --with numpy python3 scripts/crop_gif.py exports/direct/mtc180_direct_launch.gif docs/images/mtc180_direct_launch.gif

@@ -129,10 +129,11 @@ ball = sphere(21.335, center=(bx0 + v0 * math.cos(launch_deg) * ft, 0.0, bz0 + v
 ball.material(preset=preset.abs, color="#f5f6fa", roughness=0.24, texture="dots", scale=4.2)
 
 animation("floor_flush_catapult_launch", [
-    keyframe(0.0, stroke=-0.20, camera=view(az=32, el=18), ease=ease.linear),
-    keyframe(0.65, stroke=0.0, camera=view(az=28, el=17), ease=ease.ease_in),
-    keyframe(1.95, stroke=1.0, camera=view(az=18, el=15), ease=ease.linear),
-    keyframe(3.20, stroke=1.40, camera=view(az=12, el=14)),
+    # Near-side view from the trap side, so the bails' sweep (171 deg cocked -> 34 deg at the arm stop) is visible.
+    keyframe(0.0, stroke=-0.20, camera=view(az=-14, el=10), ease=ease.linear),
+    keyframe(0.65, stroke=0.0, camera=view(az=-14, el=10), ease=ease.ease_in),
+    keyframe(1.95, stroke=1.0, camera=view(az=-14, el=10), ease=ease.linear),
+    keyframe(3.20, stroke=1.40, camera=view(az=-14, el=10)),
 ], fps=20, loop=True)
 
 
