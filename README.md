@@ -110,7 +110,7 @@ mise run sim        # Direct-drive 2-DOF rolling/sliding rail launch model acros
 Run `npm ci` and `npm run dev` from the repository root. The field view opens
 with a synthetic example. Use **Import trace** to view your own completed
 trajectory. The **Trace format** panel contains a downloadable JSON example.
-Use `npm test` for the headless telemetry tests and `npm run build` for the
+Use `npm test` for the headless telemetry and rubric tests and `npm run build` for the
 TypeScript check and production bundle.
 
 Carry and total distance are horizontal displacements from the release point
@@ -118,4 +118,30 @@ to first contact and final rest respectively. Bounce/rollout is the horizontal
 path length between sampled positions after first contact. Apex is the highest
 sampled altitude. Radial error is the horizontal distance from rest to the
 optional target point. Lateral error is signed crossrange offset from that
-point. The course target geometry and scoring formula remain unverified.
+point.
+
+### Competition scorecard
+
+The scorecard follows *The Mousetrap Catapult Project*, pp. 2–4. Enter the
+distance accepted by the judge on Day 1. Each completed metre from 1 to 5 earns
+2 points, up to 10. On Day 2 each of the two targets is worth 5 points for a hit.
+For example, a recorded 4.99 m and one hit across the two targets earn 13 of
+the 20 competition points.
+
+The handout leaves the distance measurement endpoint unspecified. The two
+targets are straight ahead at different distances. Their sizes and distances
+are announced on competition day. The handout estimates 3–4 minutes for 6–8
+balls and allows either a football field or tennis courts. The scorecard uses
+the recorded competition outcomes. To score an imported trace, explicitly choose
+its carry or total distance according to the judge's convention. Importing a new
+trace preserves the scorecard entries.
+
+The other 90 base points cover the catapult (20), design paragraph (20),
+physics paragraph (25), diagram (15), and group performance (10). The equipment
+bonus is +4 for a real golf ball, +6 for a gravity-powered sling trebuchet, or
++8 for both together. Group members divide a separate pool of exactly 6 points.
+Late work loses 10 points per day.
+
+Two details distinguish the handout from the build notes above. The ball
+must pass within 3 inches of the ground at some point during launch.
+Rubber bands are allowed for attachment.

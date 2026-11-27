@@ -1,0 +1,137 @@
+.score-jump {
+  margin-left: auto;
+}
+#scorecard {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 2px solid #273f36;
+  scroll-margin: 1rem;
+}
+.score-head,
+.grade-totals,
+.score-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+#score-title {
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+}
+#scorecard p {
+  max-width: 72ch;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+.score-subtotal {
+  min-width: 12rem;
+  padding: 0.8rem 1rem;
+  background: #e3eadf;
+  border-radius: 0.3rem;
+  font-size: 0.8rem;
+}
+.score-subtotal output {
+  display: block;
+  font: 600 1.5rem/1.4 system-ui, sans-serif;
+}
+.score-days {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin-top: 1.4rem;
+}
+#scorecard fieldset {
+  margin: 0;
+  min-width: 0;
+  padding: 0.6rem 1rem 1rem;
+  border: 1px solid #acb7aa;
+  border-radius: 0.3rem;
+}
+#scorecard legend {
+  padding: 0 0.3rem;
+  font: 620 1rem/1.5 system-ui, sans-serif;
+}
+.score-entry {
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+  line-height: 1.4;
+}
+.score-entry input,
+.score-entry select {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.35rem;
+  border: 1px solid #acb7aa;
+  border-radius: 0.3rem;
+  padding: 0.45rem 0.55rem;
+  color: #192e29;
+  background: #fffef8;
+  font: inherit;
+}
+.score-entry input {
+  width: 7.5rem;
+}
+.score-entry input:invalid {
+  border-color: #963f21;
+}
+.score-full {
+  margin-top: 1rem;
+}
+#score-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin: 1.2rem 0;
+}
+#score-sections .score-entry + .score-entry,
+.grade-totals {
+  border-top: 1px solid #c9cec4;
+}
+.grade-totals {
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.grade-totals output {
+  font-weight: bold;
+}
+#grade-error {
+  color: #84241f;
+}
+@media (max-width: 760px) {
+  .score-days,
+  #score-sections {
+    grid-template-columns: 1fr;
+  }
+  .score-head {
+    flex-wrap: wrap;
+  }
+  .score-subtotal {
+    width: 100%;
+  }
+  .score-entry {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.7rem;
+  }
+}
+#scorecard [hidden] {
+  display: none;
+}
+.score-copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.score-copy button {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  background: #fffef8;
+  color: #234b40;
+  border: 1px solid #acb7aa;
+  border-radius: 0.3rem;
+}
+.score-copy button:disabled {
+  color: #54605b;
+  cursor: default;
+}

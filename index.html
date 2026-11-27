@@ -8,7 +8,10 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header><strong>MTC–180</strong><span>Field notebook</span></header>
+    <header>
+      <strong>MTC–180</strong><span>Field notebook</span>
+      <a class="score-jump" href="#scorecard">Scorecard</a>
+    </header>
     <main>
       <div class="title">
         <div>
@@ -59,6 +62,116 @@
         </p>
         <a href="/example.json" download>Download example JSON</a>
       </details>
+      <section id="scorecard" aria-labelledby="score-title">
+        <div class="score-head">
+          <div>
+            <h2 id="score-title">Competition scorecard</h2>
+            <p>The judge supplies the distance and confirms each hit.</p>
+          </div>
+          <div class="score-subtotal">
+            <span>Competition subtotal</span>
+            <output id="competition-points">Pending</output>
+          </div>
+        </div>
+        <form id="grading" novalidate>
+          <div class="score-days">
+            <fieldset>
+              <legend>Day 1 · Distance</legend>
+              <p>
+                Each whole metre earns 2 points, up to 10. The handout leaves
+                the measurement endpoint open.
+              </p>
+              <label class="score-entry">
+                Accepted distance (m)
+                <input
+                  name="distance"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Pending"
+                />
+              </label>
+              <div
+                class="score-copy" role="group"
+                aria-label="Copy distance from the displayed trace"
+              >
+                <button type="button" id="score-use-carry" disabled>
+                  Use trace carry
+                </button>
+                <button type="button" id="score-use-total" disabled>
+                  Use trace total
+                </button>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Day 2 · Accuracy</legend>
+              <p>
+                Each target hit earns 5 points. The teacher announces target
+                sizes and distances on competition day.
+              </p>
+              <div id="score-targets"></div>
+            </fieldset>
+          </div>
+          <details class="score-full">
+            <summary>Full project grade · 110 base points</summary>
+            <p>
+              The handout estimates 3–4 minutes for 6–8 balls. Use the teacher’s
+              event limit when grading time.
+            </p>
+            <div id="score-sections"></div>
+            <fieldset class="score-adjustments">
+              <legend>Bonuses and lateness</legend>
+              <label class="score-entry">
+                Equipment bonus
+                <select name="equipment">
+                  <option value="">Pending</option>
+                  <option value="none">None (+0)</option>
+                  <option value="ball">Real golf ball (+4)</option>
+                  <option value="trebuchet">Trebuchet (+6)</option>
+                  <option value="both">
+                    Trebuchet with real golf ball (+8)
+                  </option>
+                </select>
+              </label>
+              <label class="score-entry">
+                Days late
+                <input
+                  name="late"
+                  type="number"
+                  min="0"
+                  max="9007199254740991"
+                  step="1"
+                  placeholder="Pending"
+                />
+              </label>
+              <label class="score-entry">
+                Group bonus allocation
+                <select name="group">
+                  <option value="">Pending</option>
+                  <option value="none">No bonus awarded</option>
+                  <option value="2">Two members</option>
+                  <option value="3">Three members</option>
+                </select>
+              </label>
+              <div id="score-allocation" hidden>
+                <p>
+                  Divide 6 points among the group. If the shares total a
+                  different amount, everyone receives zero.
+                </p>
+                <div id="score-members"></div>
+              </div>
+            </fieldset>
+            <div class="grade-totals">
+              <p>Base score <output id="base-points">Pending</output></p>
+              <p>
+                Adjusted score <output id="adjusted-points">Pending</output>
+              </p>
+            </div>
+            <ul id="score-individuals" hidden></ul>
+          </details>
+          <p id="grade-error" role="alert" hidden></p>
+        </form>
+      </section>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

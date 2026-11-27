@@ -1,4 +1,5 @@
 import { createField } from './field'
+import { mountScorecard, updateScorecardTrace } from './scorecard'
 import { measure, type Sample, type Target } from './physics/telemetry'
 
 const fieldHost = document.querySelector<HTMLElement>('#field')!
@@ -60,6 +61,7 @@ function display(input: unknown, name: string) {
       return row
     })
   )
+  updateScorecardTrace(m.carry, m.total)
   source.textContent = name
   errorBox.hidden = true
 }
@@ -69,6 +71,8 @@ camera.addEventListener('change', () => {
     camera.value as Parameters<ReturnType<typeof createField>['view']>[0]
   )
 })
+
+mountScorecard()
 
 let currentRequest = 0
 async function load(read: () => Promise<string>, name: string) {
