@@ -273,3 +273,70 @@ a {
     justify-self: center;
   }
 }
+
+#practice-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.7rem 1rem;
+}
+#practice-form label:not([hidden]) {
+  display: grid;
+  gap: 0.15rem;
+}
+#practice-form input,
+#practice-form select,
+.practice-actions button {
+  border: 1px solid #acb7aa;
+  border-radius: 0.3rem;
+  padding: 0.48rem;
+  font: inherit;
+  color: inherit;
+  background: #fffef8;
+}
+#practice-form input {
+  width: 8rem;
+}
+.practice-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.practice-actions button {
+  cursor: pointer;
+}
+.practice-actions button[type='submit'] {
+  background: #234b40;
+  color: white;
+}
+.practice-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+#practice-error {
+  color: #84241f;
+}
+.practice-results-wrap {
+  overflow-x: auto;
+}
+#practice-results {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+#practice-results caption {
+  font-weight: 600;
+  text-align: left;
+}
+#practice-results th,
+#practice-results td {
+  padding: 0.55rem;
+  border-bottom: 1px solid #c9cec4;
+  overflow-wrap: anywhere;
+}
+
+#practice-results th {
+  white-space: nowrap;
+}
+#practice-results td {
+  min-width: 5rem;
+}

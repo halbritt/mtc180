@@ -23,6 +23,7 @@ import {
 import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
+import type { PracticeTarget } from './physics/practice'
 import type { Sample, Target } from './physics/telemetry'
 
 type View = 'orbit' | 'side' | 'overhead' | 'downrange'
@@ -133,6 +134,97 @@ function arrangeLabels(
   }
 }
 
+function disposeContents(group: Group) {
+  group.traverse((obj) => {
+    if (obj instanceof CSS2DObject) obj.element.remove()
+    if (
+      obj instanceof Mesh ||
+      obj instanceof Points ||
+      obj instanceof GridHelper
+    ) {
+      obj.geometry.dispose()
+      const materials = Array.isArray(obj.material)
+        ? obj.material
+        : [obj.material]
+      for (const material of materials) material.dispose()
+    }
+  })
+  group.clear()
+}
+
+function drawGround(group: Group, bounds: Box3) {
+  const size = bounds.getSize(new Vector3())
+  const span = Math.max(1, size.x, size.z, size.y)
+  const center = bounds.getCenter(new Vector3())
+  const stepBase = 10 ** Math.floor(Math.log10(span / 8))
+  const stepFactor = span / (8 * stepBase)
+  const step =
+    stepBase *
+    (stepFactor > 5 ? 10 : stepFactor > 2 ? 5 : stepFactor > 1 ? 2 : 1)
+  const grid = new GridHelper(32 * step, 32, 0x638e76, 0x446f59)
+  grid.position.set(
+    Math.round(center.x / step) * step,
+    0,
+    Math.round(center.z / step) * step
+  )
+  group.add(grid)
+  // Alternating strips are field markings. Their width matches one grid interval.
+  const groundGeometry = new PlaneGeometry(
+    step * 32,
+    step * 32,
+    32,
+    1
+  ).toNonIndexed()
+  const grass: number[] = []
+  const turfColors = [new Color(0x285442), new Color(0x2b5846)]
+  for (let i = 0; i < groundGeometry.getAttribute('position').count; i++) {
+    grass.push(...turfColors[Math.floor(i / 6) % 2].toArray())
+  }
+  groundGeometry.setAttribute('color', new Float32BufferAttribute(grass, 3))
+  const ground = new Mesh(
+    groundGeometry,
+    new MeshBasicMaterial({ vertexColors: true })
+  )
+  ground.rotation.x = -Math.PI / 2
+  ground.position.copy(grid.position)
+  ground.position.y -= step * 0.005
+  group.add(ground)
+}
+
+function drawFootprint(group: Group, practice: PracticeTarget, bounds: Box3) {
+  const point = (dx: number, dy: number) =>
+    new Vector3(practice.x + dx, 0, -(practice.y + dy))
+  // Vertices wind upwards on the x/z ground plane. Both target shapes are convex.
+  let outline: Vector3[]
+  if (practice.shape === 'circle') {
+    const radius = practice.radius
+    outline = Array.from({ length: 64 }, (_, i) => {
+      const angle = (2 * Math.PI * i) / 64
+      return point(radius * Math.cos(angle), radius * Math.sin(angle))
+    })
+  } else {
+    const x = practice.length / 2
+    const y = practice.width / 2
+    outline = [point(-x, -y), point(x, -y), point(x, y), point(-x, y)]
+  }
+  for (const vertex of outline) bounds.expandByPoint(vertex)
+  const geometry = new BufferGeometry().setFromPoints(outline)
+  const triangles: number[] = []
+  for (let i = 1; i < outline.length - 1; i++) triangles.push(0, i, i + 1)
+  geometry.setIndex(triangles)
+  const fill = new MeshBasicMaterial({
+    color: 0xa6c7ff,
+    transparent: true,
+    opacity: 0.2,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  })
+  group.add(new Mesh(geometry, fill))
+  ribbon(group, [...outline, outline[0]], 0xa6c7ff, 2)
+}
+
 export function createField(host: HTMLElement) {
   const renderer = new WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -161,7 +253,12 @@ export function createField(host: HTMLElement) {
   controls.maxZoom = 32
 
   const content = new Group()
-  scene.add(content)
+  const groundAndTarget = new Group()
+  scene.add(content, groundAndTarget)
+  const traceBounds = new Box3()
+  let traceTarget: Vector3 | undefined
+  let targetLabel: ReturnType<typeof label> | undefined
+  let targetLabelIndex = 0
   let origin: Target | undefined
   const ballPosition = new Vector3()
   const projected = new Vector3()
@@ -243,21 +340,10 @@ export function createField(host: HTMLElement) {
   }
 
   function clear() {
-    content.traverse((obj) => {
-      if (obj instanceof CSS2DObject) obj.element.remove()
-      if (
-        obj instanceof Mesh ||
-        obj instanceof Points ||
-        obj instanceof GridHelper
-      ) {
-        obj.geometry.dispose()
-        const materials = Array.isArray(obj.material)
-          ? obj.material
-          : [obj.material]
-        for (const material of materials) material.dispose()
-      }
-    })
-    content.clear()
+    disposeContents(content)
+    disposeContents(groundAndTarget)
+    traceTarget = undefined
+    targetLabel = undefined
     labels.length = 0
     origin = undefined
     ball.hidden = true
@@ -269,7 +355,36 @@ export function createField(host: HTMLElement) {
     projectCursor()
   }
 
-  function show(samples: readonly Sample[], target?: Target) {
+  function setPractice(practice?: PracticeTarget) {
+    if (!origin) return
+    disposeContents(groundAndTarget)
+    if (targetLabel) labels.splice(targetLabelIndex, 1)
+    targetLabel = undefined
+    bounds.copy(traceBounds)
+    const center = practice
+      ? new Vector3(practice.x, 0, -practice.y)
+      : traceTarget
+    if (practice) drawFootprint(groundAndTarget, practice, bounds)
+    if (center) {
+      bounds.expandByPoint(center)
+      dot(groundAndTarget, center, 0xa6c7ff, 7)
+      targetLabel = label(
+        groundAndTarget,
+        center,
+        practice ? 'Practice target' : 'Target',
+        '#c3d7ff'
+      )
+      labels.splice(targetLabelIndex, 0, targetLabel)
+    }
+    drawGround(groundAndTarget, bounds)
+    view(activeView)
+  }
+
+  function show(
+    samples: readonly Sample[],
+    target?: Target,
+    practice?: PracticeTarget
+  ) {
     clear()
     if (!samples.length) {
       invalidate()
@@ -279,47 +394,9 @@ export function createField(host: HTMLElement) {
     origin = { x: start.x, y: start.y }
     const path = samples.map((point) => fieldPosition(point, start))
     ballPosition.copy(path[0])
-    const targetPoint = target && fieldPosition({ ...target, z: 0 }, start)
-    bounds.setFromPoints(path)
-    bounds.expandByPoint(new Vector3(0, 0, 0))
-    if (targetPoint) bounds.expandByPoint(targetPoint)
-    const size = bounds.getSize(new Vector3())
-    const span = Math.max(1, size.x, size.z, size.y)
-    const center = bounds.getCenter(new Vector3())
-    const stepBase = 10 ** Math.floor(Math.log10(span / 8))
-    const stepFactor = span / (8 * stepBase)
-    const step =
-      stepBase *
-      (stepFactor > 5 ? 10 : stepFactor > 2 ? 5 : stepFactor > 1 ? 2 : 1)
-    const grid = new GridHelper(32 * step, 32, 0x638e76, 0x446f59)
-    grid.position.set(
-      Math.round(center.x / step) * step,
-      0,
-      Math.round(center.z / step) * step
-    )
-    content.add(grid)
-    // Alternating strips are field markings. Their width matches one grid interval.
-    const groundGeometry = new PlaneGeometry(
-      step * 32,
-      step * 32,
-      32,
-      1
-    ).toNonIndexed()
-    const grass: number[] = []
-    const turfColors = [new Color(0x285442), new Color(0x2b5846)]
-    for (let i = 0; i < groundGeometry.getAttribute('position').count; i++) {
-      grass.push(...turfColors[Math.floor(i / 6) % 2].toArray())
-    }
-    groundGeometry.setAttribute('color', new Float32BufferAttribute(grass, 3))
-    const ground = new Mesh(
-      groundGeometry,
-      new MeshBasicMaterial({ vertexColors: true })
-    )
-    ground.rotation.x = -Math.PI / 2
-    ground.position.copy(grid.position)
-    ground.position.y -= step * 0.005
-    content.add(ground)
-
+    traceTarget = target && fieldPosition({ ...target, z: 0 }, start)
+    traceBounds.setFromPoints(path)
+    traceBounds.expandByPoint(new Vector3(0, 0, 0))
     const contact = samples.findIndex((p) => p.event === 'contact')
     const afterFlight = contact < 0 ? path.length - 1 : contact
     ribbon(content, path.slice(0, afterFlight + 1), carryColor, 3.5)
@@ -339,10 +416,7 @@ export function createField(host: HTMLElement) {
         )
       )
     }
-    if (targetPoint) {
-      dot(content, targetPoint, 0xa6c7ff, 7)
-      labels.push(label(content, targetPoint, 'Target', '#c3d7ff'))
-    }
+    targetLabelIndex = labels.length
     let bounces = 0
     samples.forEach((s, i) => {
       if (i > contact && s.event === 'contact') {
@@ -352,7 +426,7 @@ export function createField(host: HTMLElement) {
     })
     dot(content, path[0], carryColor, 5)
     labels.push(label(content, path[0], 'Release', '#ccffdf'))
-    view(activeView)
+    setPractice(practice)
   }
   const observer = new ResizeObserver(resize)
   observer.observe(host)
@@ -361,6 +435,7 @@ export function createField(host: HTMLElement) {
     show,
     view,
     setCursor,
+    setPractice,
     dispose() {
       observer.disconnect()
       controls.dispose()

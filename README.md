@@ -123,6 +123,22 @@ sampled altitude. Radial error is the horizontal distance from rest to the
 optional target point. Lateral error is signed crossrange offset from that
 point.
 
+### Practice targets
+
+Open **Practice targets** and enter a centre offset from release (downrange and
+crossrange, in metres). Set a circle radius or the full length and width of a
+rectangle. Choose **First contact** or **Final rest**, then **Apply target**.
+The field shows the footprint. A point on its edge counts as a hit in this
+practice scenario.
+
+Import trials with distinct filenames to compare them against the same target.
+Optional text fields `design` and `setting` in the trace JSON identify the
+configuration the operator selected. Reimporting a filename replaces its result.
+The first imported trace replaces the synthetic example in the comparison.
+Changing the practice target reevaluates all loaded trials. **Clear target**
+restores the current trace’s original target. Competition hits remain
+judge-entered.
+
 ### Competition scorecard
 
 The scorecard follows *The Mousetrap Catapult Project*, pp. 2–4. Enter the

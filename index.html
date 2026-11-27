@@ -70,6 +70,96 @@
           <dl id="metrics"></dl>
         </aside>
       </div>
+      <details id="practice">
+        <summary>Practice targets</summary>
+        <p>
+          Choose a field position relative to release. Compare trials against
+          the same target at first ground contact or final rest.
+        </p>
+        <form id="practice-form">
+          <label
+            >Downrange (m)<input
+              name="x"
+              type="number"
+              step="any"
+              required
+              placeholder="Metres"
+          /></label>
+          <label
+            >Crossrange (m)<input
+              name="y"
+              type="number"
+              value="0"
+              step="any"
+              required
+          /></label>
+          <label
+            >Shape<select name="shape">
+              <option value="circle">Circle</option>
+              <option value="rectangle">Rectangle</option>
+            </select></label
+          >
+          <label
+            >Radius (m)<input
+              name="radius"
+              type="number"
+              min="0"
+              step="any"
+              required
+          /></label>
+          <label hidden
+            >Downrange length (m)<input
+              name="length"
+              type="number"
+              min="0"
+              step="any"
+              required
+              disabled
+          /></label>
+          <label hidden
+            >Crossrange width (m)<input
+              name="width"
+              type="number"
+              min="0"
+              step="any"
+              required
+              disabled
+          /></label>
+          <label
+            >Evaluate at<select name="endpoint">
+              <option value="contact">First contact</option>
+              <option value="rest">Final rest</option>
+            </select></label
+          >
+          <div class="practice-actions">
+            <button type="submit">Apply target</button>
+            <button id="clear-practice" type="button" disabled>
+              Clear target
+            </button>
+          </div>
+        </form>
+        <p id="practice-error" role="alert" hidden></p>
+        <div id="practice-report" hidden>
+          <p id="practice-summary"></p>
+          <div class="practice-results-wrap">
+            <table id="practice-results">
+              <caption>
+                Trial comparison
+              </caption>
+              <thead>
+                <tr>
+                  <th>Trace</th>
+                  <th>Design</th>
+                  <th>Setting</th>
+                  <th>Result</th>
+                  <th>Distance from centre</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
       <details>
         <summary>Trace format</summary>
         <p>
@@ -78,7 +168,9 @@
           <code>y</code> crossrange and <code>z</code> altitude. Start at
           release, mark each ground strike with <code>"event": "contact"</code>,
           and end with <code>"event": "rest"</code>. An optional
-          <code>target</code> point enables error measurements.
+          <code>target</code> point enables error measurements. Optional
+          <code>design</code> and <code>setting</code> strings identify the
+          configuration used for a trial.
         </p>
         <a href="/example.json" download>Download example JSON</a>
       </details>

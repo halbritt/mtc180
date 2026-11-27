@@ -1,4 +1,6 @@
 import { createField } from './field'
+import { mountPractice } from './practice-controls'
+import { evaluatePractice, type PracticeTarget } from './physics/practice'
 import { mountReplay } from './replay-controls'
 import { mountScorecard, updateScorecardTrace } from './scorecard'
 import { measure, type Sample, type Target } from './physics/telemetry'
@@ -23,19 +25,17 @@ try {
 
 const loadReplay = field ? mountReplay(field.setCursor) : undefined
 
-function display(input: unknown, name: string) {
-  if (
-    !input ||
-    typeof input !== 'object' ||
-    !('samples' in input) ||
-    !Array.isArray(input.samples)
-  ) {
-    throw new Error('Supply a JSON object containing a samples array.')
-  }
-  const samples: Sample[] = input.samples
-  const target = 'target' in input ? (input.target as Target) : undefined
-  // measure validates every coordinate and event before the renderer sees the trace.
-  const m = measure(samples, target)
+type Trace = { samples: Sample[]; measurements: ReturnType<typeof measure> }
+let current: Trace | undefined
+const practice = mountPractice((target) => {
+  if (current) renderMeasurements(current, target)
+  field?.setPractice(target)
+})
+
+function renderMeasurements(trace: Trace, practiceTarget?: PracticeTarget) {
+  const m = trace.measurements
+  const restError =
+    practiceTarget && evaluatePractice(trace.samples, practiceTarget, 'rest')
   const distance = (value: number | null) =>
     value === null ? '—' : value.toFixed(2) + ' m'
   const readings = [
@@ -47,12 +47,17 @@ function display(input: unknown, name: string) {
       'Rest (x, y)',
       '(' + m.restX.toFixed(2) + ', ' + m.restY.toFixed(2) + ') m',
     ],
-    ['Target distance', distance(m.targetDistance)],
-    ['Radial error', distance(m.radialError)],
-    ['Lateral error', distance(m.lateralError)],
+    [
+      'Target distance',
+      distance(
+        practiceTarget
+          ? Math.hypot(practiceTarget.x, practiceTarget.y)
+          : m.targetDistance
+      ),
+    ],
+    ['Rest radial error', distance(restError?.radialError ?? m.radialError)],
+    ['Rest lateral error', distance(restError?.dy ?? m.lateralError)],
   ]
-  field?.show(samples, target)
-  loadReplay?.(samples)
   metrics.replaceChildren(
     ...readings.map(([key, value]) => {
       const row = document.createElement('div')
@@ -65,7 +70,36 @@ function display(input: unknown, name: string) {
       return row
     })
   )
-  updateScorecardTrace(m.carry, m.total)
+}
+
+function display(input: unknown, name: string, example: boolean) {
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    !('samples' in input) ||
+    !Array.isArray(input.samples)
+  ) {
+    throw new Error('Supply a JSON object containing a samples array.')
+  }
+  const samples: Sample[] = input.samples
+  const target = 'target' in input ? (input.target as Target) : undefined
+  const design = 'design' in input ? input.design : undefined
+  const setting = 'setting' in input ? input.setting : undefined
+  if (
+    (design !== undefined && typeof design !== 'string') ||
+    (setting !== undefined && typeof setting !== 'string')
+  ) {
+    throw new Error('Use text for the optional design and setting labels.')
+  }
+  const measurements = measure(samples, target)
+  const trace = { samples, measurements }
+  if (practice.active) evaluatePractice(samples, practice.active, 'contact')
+  renderMeasurements(trace, practice.active)
+  field?.show(samples, target, practice.active)
+  loadReplay?.(samples)
+  current = trace
+  practice.record({ name, design, setting, samples }, example)
+  updateScorecardTrace(measurements.carry, measurements.total)
   source.textContent = name
   errorBox.hidden = true
 }
@@ -79,11 +113,15 @@ camera.addEventListener('change', () => {
 mountScorecard()
 
 let currentRequest = 0
-async function load(read: () => Promise<string>, name: string) {
+async function load(
+  read: () => Promise<string>,
+  name: string,
+  example = false
+) {
   const request = ++currentRequest
   try {
     const content = await read()
-    if (request === currentRequest) display(JSON.parse(content), name)
+    if (request === currentRequest) display(JSON.parse(content), name, example)
   } catch (error) {
     if (request !== currentRequest) return
     errorBox.textContent =
@@ -98,8 +136,12 @@ file.addEventListener('change', () => {
   if (selected) void load(() => selected.text(), selected.name)
   file.value = ''
 })
-void load(async () => {
-  const response = await fetch(import.meta.env.BASE_URL + 'example.json')
-  if (!response.ok) throw new Error('Example data could not be retrieved.')
-  return response.text()
-}, 'Synthetic example trace')
+void load(
+  async () => {
+    const response = await fetch(import.meta.env.BASE_URL + 'example.json')
+    if (!response.ok) throw new Error('Example data could not be retrieved.')
+    return response.text()
+  },
+  'Synthetic example trace',
+  true
+)
