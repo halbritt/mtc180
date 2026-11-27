@@ -109,7 +109,10 @@ mise run sim        # Direct-drive 2-DOF rolling/sliding rail launch model acros
 
 Run `npm ci` and `npm run dev` from the repository root. The field view opens
 with a synthetic example. Use **Import trace** to view your own completed
-trajectory. The **Trace format** panel contains a downloadable JSON example.
+trajectory. Select **Play** to follow the ball from release to rest. The slider
+pauses playback at the chosen time. Use **Speed** for half- or quarter-speed
+replay. The marker follows straight segments between timestamped positions.
+The **Trace format** panel contains a downloadable JSON example.
 Use `npm test` for the headless telemetry and rubric tests and `npm run build` for the
 TypeScript check and production bundle.
 

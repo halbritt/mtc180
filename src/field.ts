@@ -32,6 +32,13 @@ const directions: Record<View, Vector3> = {
   overhead: new Vector3(0, 1, 0.00001),
   downrange: new Vector3(-1, 0.085, 0),
 }
+type Position = Pick<Sample, 'x' | 'y' | 'z'>
+
+// Surveyed coordinates use z up. Center the WebGL field on the release in x and y.
+function fieldPosition(point: Position, origin: Target, out = new Vector3()) {
+  return out.set(point.x - origin.x, point.z, origin.y - point.y)
+}
+
 const carryColor = 0xbcffd6
 const rollColor = 0xffbc6b
 
@@ -139,7 +146,11 @@ export function createField(host: HTMLElement) {
     'Recorded flight and ground track'
   )
   renderer.domElement.setAttribute('role', 'img')
-  host.append(renderer.domElement, overlay.domElement)
+  const ball = document.createElement('div')
+  ball.className = 'field-ball'
+  ball.setAttribute('aria-hidden', 'true')
+  ball.hidden = true
+  host.append(renderer.domElement, ball, overlay.domElement)
 
   const scene = new Scene()
   scene.background = new Color(0x183b34)
@@ -151,6 +162,11 @@ export function createField(host: HTMLElement) {
 
   const content = new Group()
   scene.add(content)
+  let origin: Target | undefined
+  const ballPosition = new Vector3()
+  const projected = new Vector3()
+  let viewportWidth = 1,
+    viewportHeight = 1
   const labels: ReturnType<typeof label>[] = []
   const bounds = new Box3().setFromPoints([
     new Vector3(-1, 0, -1),
@@ -161,11 +177,21 @@ export function createField(host: HTMLElement) {
   let framedWidth = 2,
     framedHeight = 2
 
+  function projectCursor() {
+    if (!origin) return
+    projected.copy(ballPosition).project(camera)
+    ball.hidden = Math.abs(projected.z) > 1
+    const x = ((projected.x + 1) * viewportWidth) / 2 - 7
+    const y = ((1 - projected.y) * viewportHeight) / 2 - 7
+    ball.style.transform = `translate3d(${x}px, ${y}px, 0)`
+  }
+
   function render() {
     pending = 0
     renderer.render(scene, camera)
     overlay.render(scene, camera)
-    arrangeLabels(labels, camera, host.clientWidth, host.clientHeight)
+    arrangeLabels(labels, camera, viewportWidth, viewportHeight)
+    projectCursor()
   }
   function invalidate() {
     if (!pending) pending = requestAnimationFrame(render)
@@ -175,6 +201,8 @@ export function createField(host: HTMLElement) {
   function resize() {
     const width = Math.max(1, host.clientWidth),
       height = Math.max(1, host.clientHeight)
+    viewportWidth = width
+    viewportHeight = height
     renderer.setSize(width, height)
     overlay.setSize(width, height)
     // Keep the full preset framing when a wide plot becomes a tall, narrow one.
@@ -231,6 +259,14 @@ export function createField(host: HTMLElement) {
     })
     content.clear()
     labels.length = 0
+    origin = undefined
+    ball.hidden = true
+  }
+
+  function setCursor(point: Position) {
+    if (!origin) return
+    fieldPosition(point, origin, ballPosition)
+    projectCursor()
   }
 
   function show(samples: readonly Sample[], target?: Target) {
@@ -240,13 +276,10 @@ export function createField(host: HTMLElement) {
       return
     }
     const start = samples[0]
-    // Local origin preserves small displacements when observations use surveyed coordinates.
-    // The scene uses y up and a right-handed transform of the data's z-up frame.
-    const path = samples.map(
-      (p) => new Vector3(p.x - start.x, p.z, start.y - p.y)
-    )
-    const targetPoint =
-      target && new Vector3(target.x - start.x, 0, start.y - target.y)
+    origin = { x: start.x, y: start.y }
+    const path = samples.map((point) => fieldPosition(point, start))
+    ballPosition.copy(path[0])
+    const targetPoint = target && fieldPosition({ ...target, z: 0 }, start)
     bounds.setFromPoints(path)
     bounds.expandByPoint(new Vector3(0, 0, 0))
     if (targetPoint) bounds.expandByPoint(targetPoint)
@@ -327,11 +360,13 @@ export function createField(host: HTMLElement) {
   return {
     show,
     view,
+    setCursor,
     dispose() {
       observer.disconnect()
       controls.dispose()
       cancelAnimationFrame(pending)
       clear()
+      ball.remove()
       renderer.dispose()
       renderer.domElement.remove()
       overlay.domElement.remove()

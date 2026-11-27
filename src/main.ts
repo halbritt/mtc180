@@ -1,4 +1,5 @@
 import { createField } from './field'
+import { mountReplay } from './replay-controls'
 import { mountScorecard, updateScorecardTrace } from './scorecard'
 import { measure, type Sample, type Target } from './physics/telemetry'
 
@@ -19,6 +20,8 @@ try {
   fieldHost.replaceChildren(message)
   camera.disabled = true
 }
+
+const loadReplay = field ? mountReplay(field.setCursor) : undefined
 
 function display(input: unknown, name: string) {
   if (
@@ -49,6 +52,7 @@ function display(input: unknown, name: string) {
     ['Lateral error', distance(m.lateralError)],
   ]
   field?.show(samples, target)
+  loadReplay?.(samples)
   metrics.replaceChildren(
     ...readings.map(([key, value]) => {
       const row = document.createElement('div')
