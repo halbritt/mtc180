@@ -9,3 +9,7 @@ __pycache__/
 # Cadpole / Bambu temporary files
 *.bak
 .DS_Store
+
+# Browser app dependencies and production build
+node_modules/
+dist/

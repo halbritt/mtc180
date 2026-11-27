@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#f6f5ed" />
+    <title>Shot telemetry · MTC-180</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header><strong>MTC–180</strong><span>Field notebook</span></header>
+    <main>
+      <div class="title">
+        <div>
+          <h1>Shot telemetry</h1>
+          <p id="source">Synthetic example trace</p>
+        </div>
+        <label class="import"
+          >Import trace<input
+            id="file"
+            type="file"
+            accept=".json,application/json"
+        /></label>
+      </div>
+      <p id="error" role="alert" hidden></p>
+      <div class="columns">
+        <section class="visual" aria-label="Trajectory view">
+          <div class="toolbar">
+            <h2>Field view</h2>
+            <label
+              >Camera
+              <select id="camera">
+                <option value="orbit">Free orbit</option>
+                <option value="side">Side elevation</option>
+                <option value="overhead">Overhead map</option>
+                <option value="downrange">Down the line</option>
+              </select></label
+            >
+          </div>
+          <div id="field"></div>
+          <div class="legend">
+            <span>Carry</span><span>After first contact</span>
+          </div>
+        </section>
+        <aside>
+          <h2>Measurements</h2>
+          <dl id="metrics"></dl>
+        </aside>
+      </div>
+      <details>
+        <summary>Trace format</summary>
+        <p>
+          Import a JSON file with a <code>samples</code> array ordered by time
+          in seconds. Coordinates are metres: <code>x</code> downrange,
+          <code>y</code> crossrange and <code>z</code> altitude. Start at
+          release, mark each ground strike with <code>"event": "contact"</code>,
+          and end with <code>"event": "rest"</code>. An optional
+          <code>target</code> point enables error measurements.
+        </p>
+        <a href="/example.json" download>Download example JSON</a>
+      </details>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

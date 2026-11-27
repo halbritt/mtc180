@@ -104,3 +104,18 @@ mise run sim        # Direct-drive 2-DOF rolling/sliding rail launch model acros
 - **Through-Bolted Cord Post:** `1×` `M4 × 16 mm` bolt + `1×` `M4` fender washer (`≤ 12 mm` OD) + `1×` `M4` hex nut clamping across the horn tip (`cord loop turns on the Ø7.6 mm printed collar centered on Y = 0`).
 - **Stanchion Axles & Mounting:** `4×` `M4 × 45 mm` bolts/pins (arm pivot, front cord roller, gravity sear pivot, and quick-pin CoP stop sleeve across the `20.4 mm` stanchion gap) + `6×` `M4` or `#6` wood screws through the outboard stanchion L-flanges into the plywood base.
 - **Cord & Cushioning:** Non-stretch braided Dacron/nylon cord (`~260 mm` drive cord + `~300 mm` rear trigger string) and `2.8–3 mm` adhesive rubber/foam strip on the CoP stop sleeve and front bail landing pad.
+
+## Browser shot telemetry
+
+Run `npm ci` and `npm run dev` from the repository root. The field view opens
+with a synthetic example. Use **Import trace** to view your own completed
+trajectory. The **Trace format** panel contains a downloadable JSON example.
+Use `npm test` for the headless telemetry tests and `npm run build` for the
+TypeScript check and production bundle.
+
+Carry and total distance are horizontal displacements from the release point
+to first contact and final rest respectively. Bounce/rollout is the horizontal
+path length between sampled positions after first contact. Apex is the highest
+sampled altitude. Radial error is the horizontal distance from rest to the
+optional target point. Lateral error is signed crossrange offset from that
+point. The course target geometry and scoring formula remain unverified.
