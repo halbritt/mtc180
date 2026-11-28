@@ -13,6 +13,7 @@ import {
   bailSide,
   buildCordLinkageTable,
   camSide,
+  clearCordLinkageCache,
   computeDirectCupConfig,
   computeDirectRailConfig,
   computeHornLeverArmMm,
@@ -20,7 +21,9 @@ import {
   computeTiltedCradleConfig,
   computeTrebuchetConfig,
   cordLen,
+  getCordLinkageCacheStats,
   hornSide,
+  type CordLinkageTable,
 } from './linkage'
 
 describe('linkage kinematics across all 7 topologies', () => {
@@ -106,5 +109,204 @@ describe('linkage kinematics across all 7 topologies', () => {
     )
     expect(trebClamped.startsInTrough).toBe(false)
     expect(trebClamped.zBall0M).toBeGreaterThan(trebClamped.troughCenterZM)
+  })
+})
+
+interface TableSnapshot {
+  cordLengthMm: number
+  psiCockDeg: number
+  psiStopDeg: number
+  psiDeadDeg: number
+  psiEndDeg: number
+  thCockDeg: number
+  reachable: boolean
+  psisDeg: Float64Array
+  thOfPsiDeg: Float64Array
+  levBMm: Float64Array
+  levHMm: Float64Array
+  h1: Float64Array
+  h2: Float64Array
+  evals: ReturnType<CordLinkageTable['evalAtPsi']>[]
+}
+
+function snapshotTable(table: CordLinkageTable, probePsis: readonly number[]): TableSnapshot {
+  return {
+    cordLengthMm: table.cordLengthMm,
+    psiCockDeg: table.psiCockDeg,
+    psiStopDeg: table.psiStopDeg,
+    psiDeadDeg: table.psiDeadDeg,
+    psiEndDeg: table.psiEndDeg,
+    thCockDeg: table.thCockDeg,
+    reachable: table.reachable,
+    psisDeg: new Float64Array(table.psisDeg),
+    thOfPsiDeg: new Float64Array(table.thOfPsiDeg),
+    levBMm: new Float64Array(table.levBMm),
+    levHMm: new Float64Array(table.levHMm),
+    h1: new Float64Array(table.h1),
+    h2: new Float64Array(table.h2),
+    evals: probePsis.map((psi) => table.evalAtPsi(psi)),
+  }
+}
+
+function expectBitIdenticalTable(
+  actual: CordLinkageTable,
+  snap: TableSnapshot,
+  probePsis: readonly number[]
+): void {
+  expect(Object.is(actual.cordLengthMm, snap.cordLengthMm)).toBe(true)
+  expect(Object.is(actual.psiCockDeg, snap.psiCockDeg)).toBe(true)
+  expect(Object.is(actual.psiStopDeg, snap.psiStopDeg)).toBe(true)
+  expect(Object.is(actual.psiDeadDeg, snap.psiDeadDeg)).toBe(true)
+  expect(Object.is(actual.psiEndDeg, snap.psiEndDeg)).toBe(true)
+  expect(Object.is(actual.thCockDeg, snap.thCockDeg)).toBe(true)
+  expect(actual.reachable).toBe(snap.reachable)
+
+  const arrayPairs: readonly (readonly [Float64Array, Float64Array])[] = [
+    [actual.psisDeg, snap.psisDeg],
+    [actual.thOfPsiDeg, snap.thOfPsiDeg],
+    [actual.levBMm, snap.levBMm],
+    [actual.levHMm, snap.levHMm],
+    [actual.h1, snap.h1],
+    [actual.h2, snap.h2],
+  ]
+  for (const [a, b] of arrayPairs) {
+    expect(a.length).toBe(b.length)
+    for (let i = 0; i < a.length; i++) {
+      if (!Object.is(a[i], b[i])) {
+        throw new Error(`Float64Array mismatch at index ${i}: ${a[i]} !== ${b[i]}`)
+      }
+    }
+  }
+
+  for (let k = 0; k < probePsis.length; k++) {
+    const ev = actual.evalAtPsi(probePsis[k])
+    const ref = snap.evals[k]
+    expect(ev.inRange).toBe(ref.inRange)
+    expect(Object.is(ev.thDeg, ref.thDeg)).toBe(true)
+    expect(Object.is(ev.levBMm, ref.levBMm)).toBe(true)
+    expect(Object.is(ev.levHMm, ref.levHMm)).toBe(true)
+    expect(Object.is(ev.h1, ref.h1)).toBe(true)
+    expect(Object.is(ev.h2, ref.h2)).toBe(true)
+  }
+}
+
+describe('buildCordLinkageTable memoization & LRU cache', () => {
+  it('preserves bit-identical Object.is outputs and prevents model-clone/-0/non-finite collisions', () => {
+    const probePsis = [-100, -8.2, 0, 20, 48, 80]
+    const cases = [
+      { model: V51_CORD_HORN, psiCock: -8.2, psiStop: 48.0, offset: undefined, reachable: true },
+      { model: V51_CORD_HORN, psiCock: -8.2, psiStop: 48.0, offset: -25, reachable: false },
+      { model: V50_CIRCULAR_CAM, psiCock: -6.74, psiStop: 48.0, offset: undefined, reachable: true },
+    ] as const
+
+    for (const c of cases) {
+      clearCordLinkageCache()
+      const cold = buildCordLinkageTable(c.model, c.psiCock, c.psiStop, c.offset)
+      expect(cold.reachable).toBe(c.reachable)
+      expect(Object.isFrozen(cold)).toBe(true)
+      const snap = snapshotTable(cold, probePsis)
+
+      const warm = buildCordLinkageTable(c.model, c.psiCock, c.psiStop, c.offset)
+      expect(warm).toBe(cold)
+      expectBitIdenticalTable(warm, snap, probePsis)
+
+      clearCordLinkageCache()
+      const rebuilt = buildCordLinkageTable(c.model, c.psiCock, c.psiStop, c.offset)
+      expect(rebuilt).not.toBe(cold)
+      expectBitIdenticalTable(rebuilt, snap, probePsis)
+    }
+
+    clearCordLinkageCache()
+    const base = buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)
+    const v51Lk = V51_CORD_HORN.linkage as Extract<typeof V51_CORD_HORN.linkage, { kind: 'cord_horn' }>
+    const clonedOffset = {
+      ...V51_CORD_HORN,
+      linkage: { ...v51Lk, cordLengthOffsetMm: 4.0 },
+    }
+    const tOffset = buildCordLinkageTable(clonedOffset, -8.2, 48.0)
+    expect(tOffset).not.toBe(base)
+    expect(tOffset.cordLengthMm).not.toBe(base.cordLengthMm)
+
+    const clonedRoller = {
+      ...V51_CORD_HORN,
+      linkage: { ...v51Lk, rollerPosMm: [v51Lk.rollerPosMm[0] + 2, v51Lk.rollerPosMm[1]] as const },
+    }
+    const tRoller = buildCordLinkageTable(clonedRoller, -8.2, 48.0)
+    expect(tRoller).not.toBe(base)
+    expect(tRoller.cordLengthMm).not.toBe(base.cordLengthMm)
+
+    const tPosZero = buildCordLinkageTable(V51_CORD_HORN, +0, 48.0)
+    const tNegZero = buildCordLinkageTable(V51_CORD_HORN, -0, 48.0)
+    expect(tNegZero).not.toBe(tPosZero)
+    expect(Object.is(tPosZero.psiCockDeg, +0)).toBe(true)
+    expect(Object.is(tNegZero.psiCockDeg, -0)).toBe(true)
+
+    clearCordLinkageCache()
+    const nan1 = buildCordLinkageTable(V51_CORD_HORN, Number.NaN, 48.0)
+    const nan2 = buildCordLinkageTable(V51_CORD_HORN, Number.NaN, 48.0)
+    expect(nan2).not.toBe(nan1)
+    expect(getCordLinkageCacheStats().tableCacheSize).toBe(0)
+    expect(getCordLinkageCacheStats().bailSweepCacheSize).toBe(0)
+  })
+
+  it('delivers >10x cache hit speedup on repeated batch builds', () => {
+    const iterations = 40
+    const coldStart = performance.now()
+    for (let i = 0; i < iterations; i++) {
+      clearCordLinkageCache()
+      buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)
+      buildCordLinkageTable(V50_CIRCULAR_CAM, -6.74, 48.0)
+    }
+    const coldMs = performance.now() - coldStart
+
+    const warmStart = performance.now()
+    for (let i = 0; i < iterations; i++) {
+      buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)
+      buildCordLinkageTable(V50_CIRCULAR_CAM, -6.74, 48.0)
+    }
+    const warmMs = performance.now() - warmStart
+
+    expect(coldMs).toBeGreaterThan(warmMs * 10)
+  })
+
+  it('enforces bounded cache sizes and true LRU eviction on both cache tiers', () => {
+    clearCordLinkageCache()
+    const { maxTableCacheSize, maxBailSweepCacheSize } = getCordLinkageCacheStats()
+
+    const entry0 = buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)
+    const entry1 = buildCordLinkageTable(V51_CORD_HORN, -8.19, 48.0)
+    for (let i = 2; i < maxTableCacheSize; i++) {
+      buildCordLinkageTable(V51_CORD_HORN, -8.2 + i * 0.01, 48.0)
+    }
+
+    // Refresh entry1 mid-way so entry0 becomes the least-recently-used entry
+    expect(buildCordLinkageTable(V51_CORD_HORN, -8.19, 48.0)).toBe(entry1)
+
+    for (let i = maxTableCacheSize; i < maxTableCacheSize + 20; i++) {
+      buildCordLinkageTable(V51_CORD_HORN, -8.2 + i * 0.01, 48.0)
+    }
+
+    const stats = getCordLinkageCacheStats()
+    expect(stats.tableCacheSize).toBe(maxTableCacheSize)
+    expect(stats.bailSweepCacheSize).toBeLessThanOrEqual(maxBailSweepCacheSize)
+
+    // Refreshed entry stayed cached; untouched oldest entry was evicted
+    expect(buildCordLinkageTable(V51_CORD_HORN, -8.19, 48.0)).toBe(entry1)
+    expect(buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)).not.toBe(entry0)
+
+    // Verify Level-1 bailSweepCache bound and LRU eviction
+    clearCordLinkageCache()
+    const v51Lk = V51_CORD_HORN.linkage as Extract<typeof V51_CORD_HORN.linkage, { kind: 'cord_horn' }>
+    for (let i = 0; i < maxBailSweepCacheSize + 10; i++) {
+      const cloned = {
+        ...V51_CORD_HORN,
+        linkage: {
+          ...v51Lk,
+          rollerPosMm: [v51Lk.rollerPosMm[0] + i * 0.05, v51Lk.rollerPosMm[1]] as const,
+        },
+      }
+      buildCordLinkageTable(cloned, -8.2, 48.0)
+    }
+    expect(getCordLinkageCacheStats().bailSweepCacheSize).toBe(maxBailSweepCacheSize)
   })
 })

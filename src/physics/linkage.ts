@@ -358,26 +358,79 @@ function interpSorted(
   return ys[lo] + f * (ys[hi] - ys[lo])
 }
 
-export function buildCordLinkageTable(
-  model: LauncherModel,
-  psiCockDeg: number,
-  psiStopDeg: number,
-  cordOffsetMmOverride?: number
-): CordLinkageTable {
+const MAX_BAIL_SWEEP_CACHE_SIZE = 64
+const MAX_CORD_TABLE_CACHE_SIZE = 256
+
+interface BailSweepCacheEntry {
+  readonly ths: Float64Array
+  readonly lbArr: Float64Array
+  readonly lb0: number
+  readonly lbMin: number
+  readonly lbDescending: boolean
+  readonly bAtRestSpanMm: number
+  readonly bAtRestTouchAngleRad: number
+}
+
+const bailSweepCache = new Map<string, BailSweepCacheEntry>()
+const cordLinkageTableCache = new Map<string, CordLinkageTable>()
+
+function lruGet<V>(cache: Map<string, V>, key: string): V | undefined {
+  const val = cache.get(key)
+  if (val !== undefined) {
+    cache.delete(key)
+    cache.set(key, val)
+  }
+  return val
+}
+
+function lruSet<V>(
+  cache: Map<string, V>,
+  key: string,
+  val: V,
+  maxSize: number
+): void {
+  if (cache.has(key)) {
+    cache.delete(key)
+  } else if (cache.size >= maxSize) {
+    const oldestKey = cache.keys().next().value
+    if (oldestKey !== undefined) {
+      cache.delete(oldestKey)
+    }
+  }
+  cache.set(key, val)
+}
+
+function fmtNumKey(n: number): string {
+  return Object.is(n, -0) ? '-0' : String(n)
+}
+
+export function clearCordLinkageCache(): void {
+  cordLinkageTableCache.clear()
+  bailSweepCache.clear()
+}
+
+export function getCordLinkageCacheStats(): {
+  tableCacheSize: number
+  bailSweepCacheSize: number
+  maxTableCacheSize: number
+  maxBailSweepCacheSize: number
+} {
+  return {
+    tableCacheSize: cordLinkageTableCache.size,
+    bailSweepCacheSize: bailSweepCache.size,
+    maxTableCacheSize: MAX_CORD_TABLE_CACHE_SIZE,
+    maxBailSweepCacheSize: MAX_BAIL_SWEEP_CACHE_SIZE,
+  }
+}
+
+function computeBailSweep(model: LauncherModel): BailSweepCacheEntry {
   const lk = model.linkage
   if (lk.kind !== 'cord_horn' && lk.kind !== 'circular_cam') {
-    throw new RangeError(`buildCordLinkageTable requires cord_horn or circular_cam, got ${model.topology}.`)
+    throw new RangeError(
+      `buildCordLinkageTable requires cord_horn or circular_cam, got ${model.topology}.`
+    )
   }
   const tb = model.trapBank
-  const psiTieDeg =
-    lk.kind === 'cord_horn'
-      ? lk.notchPsisDeg[lk.cordTieNotchIndex]
-      : lk.notchPsisDeg[lk.notchPsisDeg.length - 1]
-  const lkOffset = (lk as { cordLengthOffsetMm?: number }).cordLengthOffsetMm
-  const offsetMm =
-    cordOffsetMmOverride ?? (typeof lkOffset === 'number' ? lkOffset : 0)
-  const cordLengthMm = cordLen(lk.cordTieThCockDeg, psiTieDeg, model) + offsetMm
-
   const thStep = 0.05
   const nTh = Math.max(2, Math.round((tb.thCockMaxDeg - tb.thRestDeg) / thStep) + 1)
   const ths = new Float64Array(nTh)
@@ -387,12 +440,146 @@ export function buildCordLinkageTable(
     ths[i] = th
     lbArr[i] = cordLen(th, 0, model)
   }
+  const lb0 = lbArr[0]
+  const lbMin = lbArr[nTh - 1]
+  const lbDescending = lbMin < lb0
+  const bAtRest = bailSide(
+    tb.thRestDeg,
+    tb.hingePosMm,
+    lk.rollerPosMm,
+    lk.rPullMm,
+    lk.rRollEffMm
+  )
+  return {
+    ths,
+    lbArr,
+    lb0,
+    lbMin,
+    lbDescending,
+    bAtRestSpanMm: bAtRest.spanMm,
+    bAtRestTouchAngleRad: bAtRest.touchAngleRad,
+  }
+}
+
+export function buildCordLinkageTable(
+  model: LauncherModel,
+  psiCockDeg: number,
+  psiStopDeg: number,
+  cordOffsetMmOverride?: number
+): CordLinkageTable {
+  const lk = model.linkage
+  if (lk.kind !== 'cord_horn' && lk.kind !== 'circular_cam') {
+    throw new RangeError(
+      `buildCordLinkageTable requires cord_horn or circular_cam, got ${model.topology}.`
+    )
+  }
+  const tb = model.trapBank
+  const psiTieDeg =
+    lk.kind === 'cord_horn'
+      ? lk.notchPsisDeg[lk.cordTieNotchIndex]
+      : lk.notchPsisDeg[lk.notchPsisDeg.length - 1]
+  const lkOffset = (lk as { cordLengthOffsetMm?: number }).cordLengthOffsetMm
+  const offsetMm =
+    cordOffsetMmOverride ?? (typeof lkOffset === 'number' ? lkOffset : 0)
+
+  const paramA = lk.kind === 'cord_horn' ? lk.hornRMm : lk.rCamEffMm
+  const paramB = lk.kind === 'cord_horn' ? lk.hornADeg : lk.camKnotDeg
+
+  const allFinite =
+    Number.isFinite(tb.thCockMaxDeg) &&
+    Number.isFinite(tb.thRestDeg) &&
+    Number.isFinite(tb.hingePosMm[0]) &&
+    Number.isFinite(tb.hingePosMm[1]) &&
+    Number.isFinite(model.arm.pivotPosMm[0]) &&
+    Number.isFinite(model.arm.pivotPosMm[1]) &&
+    Number.isFinite(lk.rollerPosMm[0]) &&
+    Number.isFinite(lk.rollerPosMm[1]) &&
+    Number.isFinite(lk.rPullMm) &&
+    Number.isFinite(lk.rRollEffMm) &&
+    Number.isFinite(paramA) &&
+    Number.isFinite(paramB) &&
+    Number.isFinite(lk.cordTieThCockDeg) &&
+    Number.isFinite(psiTieDeg) &&
+    Number.isFinite(offsetMm) &&
+    Number.isFinite(psiCockDeg) &&
+    Number.isFinite(psiStopDeg)
+
+  if (!allFinite) {
+    const sweep = computeBailSweep(model)
+    return buildCordLinkageTableFromSweep(
+      model,
+      psiCockDeg,
+      psiStopDeg,
+      psiTieDeg,
+      offsetMm,
+      sweep
+    )
+  }
+
+  const bailKey =
+    `${lk.kind}|${fmtNumKey(tb.thCockMaxDeg)}|${fmtNumKey(tb.thRestDeg)}` +
+    `|${fmtNumKey(tb.hingePosMm[0])}|${fmtNumKey(tb.hingePosMm[1])}` +
+    `|${fmtNumKey(model.arm.pivotPosMm[0])}|${fmtNumKey(model.arm.pivotPosMm[1])}` +
+    `|${fmtNumKey(lk.rollerPosMm[0])}|${fmtNumKey(lk.rollerPosMm[1])}` +
+    `|${fmtNumKey(lk.rPullMm)}|${fmtNumKey(lk.rRollEffMm)}` +
+    `|${fmtNumKey(paramA)}|${fmtNumKey(paramB)}`
+  const tableKey =
+    `${bailKey}|${fmtNumKey(lk.cordTieThCockDeg)}|${fmtNumKey(psiTieDeg)}` +
+    `|${fmtNumKey(offsetMm)}|${fmtNumKey(psiCockDeg)}|${fmtNumKey(psiStopDeg)}`
+
+  const cachedTable = lruGet(cordLinkageTableCache, tableKey)
+  if (cachedTable !== undefined) {
+    return cachedTable
+  }
+
+  let sweep = lruGet(bailSweepCache, bailKey)
+  if (sweep === undefined) {
+    sweep = computeBailSweep(model)
+    lruSet(bailSweepCache, bailKey, sweep, MAX_BAIL_SWEEP_CACHE_SIZE)
+  }
+
+  const table = buildCordLinkageTableFromSweep(
+    model,
+    psiCockDeg,
+    psiStopDeg,
+    psiTieDeg,
+    offsetMm,
+    sweep
+  )
+  lruSet(cordLinkageTableCache, tableKey, table, MAX_CORD_TABLE_CACHE_SIZE)
+  return table
+}
+
+function buildCordLinkageTableFromSweep(
+  model: LauncherModel,
+  psiCockDeg: number,
+  psiStopDeg: number,
+  psiTieDeg: number,
+  offsetMm: number,
+  sweep: BailSweepCacheEntry
+): CordLinkageTable {
+  const lk = model.linkage
+  if (lk.kind !== 'cord_horn' && lk.kind !== 'circular_cam') {
+    throw new RangeError(
+      `buildCordLinkageTable requires cord_horn or circular_cam, got ${model.topology}.`
+    )
+  }
+  const tb = model.trapBank
+  const cordLengthMm = cordLen(lk.cordTieThCockDeg, psiTieDeg, model) + offsetMm
+
+  const {
+    ths,
+    lbArr,
+    lb0,
+    lbMin,
+    lbDescending,
+    bAtRestSpanMm,
+    bAtRestTouchAngleRad,
+  } = sweep
 
   const psiMax = Math.max(psiCockDeg + 1, psiStopDeg + 20)
   const psiStep = 0.05
   const nPsiAll = Math.max(2, Math.round((psiMax - psiCockDeg) / psiStep) + 1)
-  const lb0 = lbArr[0]
-  const lbMin = lbArr[nTh - 1]
 
   const allPsis = new Float64Array(nPsiAll)
   const allNeeds = new Float64Array(nPsiAll)
@@ -404,10 +591,7 @@ export function buildCordLinkageTable(
   for (let i = 0; i < nPsiAll; i++) {
     const psi = i === nPsiAll - 1 ? psiMax : psiCockDeg + i * psiStep
     allPsis[i] = psi
-    const lAtRest = cordLen(tb.thRestDeg, psi, model)
-    const need = cordLengthMm - (lAtRest - lb0)
-    allNeeds[i] = need
-    const levH =
+    const hSide =
       lk.kind === 'cord_horn'
         ? hornSide(
             psi,
@@ -416,7 +600,7 @@ export function buildCordLinkageTable(
             model.arm.pivotPosMm,
             lk.rollerPosMm,
             lk.rRollEffMm
-          ).leverArmMm
+          )
         : camSide(
             psi,
             lk.rCamEffMm,
@@ -424,7 +608,14 @@ export function buildCordLinkageTable(
             model.arm.pivotPosMm,
             lk.rollerPosMm,
             lk.rRollEffMm
-          ).leverArmMm
+          )
+    const lAtRest =
+      bAtRestSpanMm +
+      hSide.spanMm +
+      lk.rRollEffMm * mod2Pi(bAtRestTouchAngleRad - hSide.touchAngleRad)
+    const need = cordLengthMm - (lAtRest - lb0)
+    allNeeds[i] = need
+    const levH = hSide.leverArmMm
     allLevH[i] = levH
     if (Number.isNaN(psiDeadDeg) && levH <= 0.5) {
       psiDeadDeg = psi
@@ -437,7 +628,7 @@ export function buildCordLinkageTable(
 
   const reachable = usableCount > 0 && !(clipped && usableCount === 0)
   if (!reachable || usableCount < 2) {
-    return {
+    return Object.freeze({
       cordLengthMm,
       psiCockDeg,
       psiStopDeg,
@@ -459,7 +650,7 @@ export function buildCordLinkageTable(
         h1: 0,
         h2: 0,
       }),
-    }
+    })
   }
 
   const psisDeg = allPsis.slice(0, usableCount)
@@ -468,7 +659,6 @@ export function buildCordLinkageTable(
   const levHMm = allLevH.slice(0, usableCount)
   const h1 = new Float64Array(usableCount)
   const h2 = new Float64Array(usableCount)
-  const lbDescending = lbArr[nTh - 1] < lbArr[0]
 
   for (let i = 0; i < usableCount; i++) {
     const th = interpSorted(lbArr, ths, allNeeds[i], lbDescending)
@@ -500,7 +690,7 @@ export function buildCordLinkageTable(
   const psiEndDeg = psisDeg[usableCount - 1]
   const thCockDeg = thOfPsiDeg[0]
 
-  return {
+  return Object.freeze({
     cordLengthMm,
     psiCockDeg,
     psiStopDeg,
@@ -534,7 +724,7 @@ export function buildCordLinkageTable(
         h2: interpSorted(psisDeg, h2, psiDeg, false),
       }
     },
-  }
+  })
 }
 
 export function computeDirectRailConfig(
