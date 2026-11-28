@@ -1,0 +1,438 @@
+import { describe, expect, it } from 'vitest'
+import {
+  DIRECT_ARM_RAIL,
+  GRAVITY_SLING_TREBUCHET,
+  LAUNCHER_MODELS,
+  V41_TILTED_CRADLE,
+  V50_CIRCULAR_CAM,
+  V51_CORD_HORN,
+  defaultAdjustments,
+  type LauncherModel,
+} from '../models'
+import {
+  solveLaunch,
+  validateDt,
+  type EnergyBudget,
+  type EnvConfig,
+} from './launch_solver'
+
+function makeRng(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (s + 0x6d2b79f5) | 0
+    let t = Math.imul(s ^ (s >>> 15), 1 | s)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function makeEnv(overrides: Partial<EnvConfig> = {}): EnvConfig {
+  return {
+    nominalEnergyJ: 2.12,
+    energyVarianceJ: 0,
+    energyDistribution: 'uniform',
+    turfEn: 0.32,
+    turfMuR: 0.12,
+    turfScatterSigmaRad: 0.015,
+    windVecMps: [0, 0, 0],
+    airDensityKgM3: 1.225,
+    projectile: 'golf_ball',
+    gravityMps2: 9.80665,
+    ...overrides,
+  }
+}
+
+function sumEnergy(b: EnergyBudget): number {
+  return (
+    b.keTransBallJ +
+    b.keRotBallJ +
+    b.keRotArmBailsJ +
+    b.peGravityDeltaJ +
+    b.frictionLossJ
+  )
+}
+
+function zeroFrictionDeterministic(model: LauncherModel): LauncherModel {
+  return {
+    ...model,
+    trapBank: { ...model.trapBank, bearingFrictionNm: 0 },
+    tolerances: {
+      cockAngleSigmaDeg: 0,
+      seatingOffsetSigmaM: 0,
+      yawSigmaDeg: 0,
+      stopAngleSigmaDeg: 0,
+    },
+    cycleTiming: { ...model.cycleTiming, humanSigmaS: 0 },
+  }
+}
+
+describe('launch_solver (Test 2: Energy Budget Conservation)', () => {
+  it('conserves energy within < 1% at release across all 9 registered models', () => {
+    const env = makeEnv()
+    for (const model of LAUNCHER_MODELS) {
+      const rel = solveLaunch(
+        model,
+        defaultAdjustments(model),
+        env,
+        makeRng(33)
+      )
+      expect(rel.leftCradle).toBe(true)
+      const initial = rel.energyBudget.springInitialJ
+      const accounted = sumEnergy(rel.energyBudget)
+      expect(initial).toBeGreaterThan(0)
+      const relErr = Math.abs(accounted - initial) / initial
+      expect(relErr, `${model.id} energy error ${relErr}`).toBeLessThan(0.01)
+    }
+  })
+
+  it('conserves energy within < 1% under mid-stroke slack, snap-taut overrun, and high friction', () => {
+    const env = makeEnv()
+    const v50Slack = solveLaunch(
+      V50_CIRCULAR_CAM,
+      defaultAdjustments(V50_CIRCULAR_CAM),
+      env,
+      makeRng(12)
+    )
+    expect(v50Slack.cordSlackAtDeg).not.toBeNull()
+    expect(
+      Math.abs(sumEnergy(v50Slack.energyBudget) - v50Slack.energyBudget.springInitialJ) /
+        v50Slack.energyBudget.springInitialJ
+    ).toBeLessThan(0.01)
+
+    const longCord: LauncherModel = {
+      ...V51_CORD_HORN,
+      linkage: {
+        ...V51_CORD_HORN.linkage,
+        cordLengthOffsetMm: 4.0,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const relLong = solveLaunch(
+      longCord,
+      { notch: 6, launchDeg: 42, yawDeg: 0 },
+      env,
+      makeRng(26)
+    )
+    expect(relLong.launchSpeedMps).toBeGreaterThan(0)
+    expect(
+      Math.abs(sumEnergy(relLong.energyBudget) - relLong.energyBudget.springInitialJ) /
+        relLong.energyBudget.springInitialJ
+    ).toBeLessThan(0.01)
+
+    const highFric: LauncherModel = {
+      ...V51_CORD_HORN,
+      linkage: {
+        ...V51_CORD_HORN.linkage,
+        bearingFrictionCoeff: 0.12,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const relFric = solveLaunch(
+      highFric,
+      { notch: 6, launchDeg: 42, yawDeg: 0 },
+      env,
+      makeRng(10)
+    )
+    expect(
+      Math.abs(sumEnergy(relFric.energyBudget) - relFric.energyBudget.springInitialJ) /
+        relFric.energyBudget.springInitialJ
+    ).toBeLessThan(0.01)
+  })
+})
+
+describe('launch_solver (Test 3: Inertia Sensitivity)', () => {
+  it('strictly decreases launch speed and increases wasted hard-stop KE as arm mass/inertia grows (0.5x -> 1x -> 2x)', () => {
+    const env = makeEnv()
+    const adj = { notch: 6, launchDeg: 42, yawDeg: 0 }
+    const results = [0.5, 1.0, 2.0].map((scale) => {
+      const scaled: LauncherModel = {
+        ...V51_CORD_HORN,
+        arm: {
+          ...V51_CORD_HORN.arm,
+          massKg: V51_CORD_HORN.arm.massKg * scale,
+          inertiaKgM2: V51_CORD_HORN.arm.inertiaKgM2 * scale,
+        },
+      }
+      return solveLaunch(scaled, adj, env, makeRng(9))
+    })
+
+    expect(results[0].launchSpeedMps).toBeGreaterThan(results[1].launchSpeedMps)
+    expect(results[1].launchSpeedMps).toBeGreaterThan(results[2].launchSpeedMps)
+    expect(results[2].wastedStopKeJ).toBeGreaterThan(results[1].wastedStopKeJ)
+    expect(results[1].wastedStopKeJ).toBeGreaterThan(results[0].wastedStopKeJ)
+  })
+})
+
+describe('launch_solver (Python Reference Parity)', () => {
+  it('matches analysis/cam_launch_sim.py for v5.1 Notch 6 at 42/50/58 deg', () => {
+    const v51Zero = zeroFrictionDeterministic(V51_CORD_HORN)
+    const env = makeEnv({ airDensityKgM3: 0, cdOverride: 0 })
+
+    // Point-mass cup parity with cam_launch_sim.py (~6.93 m/s)
+    const r42Point = solveLaunch(
+      v51Zero,
+      { notch: 6, launchDeg: 42, yawDeg: 0 },
+      env,
+      makeRng(1),
+      { includeBallRotInertiaInCup: false, deterministic: true }
+    )
+    expect(r42Point.launchSpeedMps).toBeCloseTo(6.93, 1)
+    expect(Math.abs(r42Point.launchSpeedMps - 6.93) / 6.93).toBeLessThan(0.005)
+    expect(r42Point.peakCordTensionN).toBeGreaterThan(75)
+    expect(r42Point.cordSlackAtDeg).toBeNull()
+
+    // Physical cup with ball rotational inertia (still ~6.90 m/s, positive topspin)
+    const r42Phys = solveLaunch(
+      v51Zero,
+      { notch: 6, launchDeg: 42, yawDeg: 0 },
+      env,
+      makeRng(1),
+      { deterministic: true }
+    )
+    expect(r42Phys.launchSpeedMps).toBeCloseTo(6.90, 1)
+    expect(r42Phys.omegaBallRadps[1]).toBeGreaterThan(30)
+
+    const r50 = solveLaunch(
+      v51Zero,
+      { notch: 6, launchDeg: 50, yawDeg: 0 },
+      env,
+      makeRng(1),
+      { includeBallRotInertiaInCup: false, deterministic: true }
+    )
+    expect(r50.launchSpeedMps).toBeCloseTo(6.21, 1)
+
+    const r58 = solveLaunch(
+      v51Zero,
+      { notch: 6, launchDeg: 58, yawDeg: 0 },
+      env,
+      makeRng(1),
+      { includeBallRotInertiaInCup: false, deterministic: true }
+    )
+    expect(r58.launchSpeedMps).toBeCloseTo(5.76, 1)
+  })
+
+  it('matches analysis/cam_launch_sim.py for v5.0 circular cam (th_cock=156 deg, mid-stroke slack)', () => {
+    const v50Zero = zeroFrictionDeterministic(V50_CIRCULAR_CAM)
+    const env = makeEnv({ airDensityKgM3: 0, cdOverride: 0 })
+
+    // d898349 coordinates -> ~5.16 m/s, slack ~53 deg
+    const r50 = solveLaunch(
+      v50Zero,
+      defaultAdjustments(v50Zero),
+      env,
+      makeRng(1),
+      { includeBallRotInertiaInCup: false, deterministic: true }
+    )
+    expect(r50.launchSpeedMps).toBeCloseTo(5.16, 1)
+    expect(r50.cordSlackAtDeg).not.toBeNull()
+    expect(r50.cordSlackAtDeg!).toBeGreaterThan(45)
+    expect(r50.cordSlackAtDeg!).toBeLessThan(60)
+
+    // With v5.1 stanchions (--cam 96.5 --th-cock 156) -> ~5.21 m/s
+    const v50OnV51Stanchions: LauncherModel = {
+      ...v50Zero,
+      trapBank: { ...v50Zero.trapBank, hingePosMm: V51_CORD_HORN.trapBank.hingePosMm },
+      arm: { ...v50Zero.arm, pivotPosMm: V51_CORD_HORN.arm.pivotPosMm },
+      linkage: {
+        ...v50Zero.linkage,
+        rollerPosMm:
+          V51_CORD_HORN.linkage.kind === 'cord_horn'
+            ? V51_CORD_HORN.linkage.rollerPosMm
+            : [48, 43],
+      } as LauncherModel['linkage'],
+    }
+    const r50V51 = solveLaunch(
+      v50OnV51Stanchions,
+      defaultAdjustments(v50OnV51Stanchions),
+      env,
+      makeRng(1),
+      { includeBallRotInertiaInCup: false, deterministic: true }
+    )
+    expect(r50V51.launchSpeedMps).toBeCloseTo(5.21, 1)
+  })
+
+  it('matches analysis/direct_arm_sim.py for direct_arm_rail 1A rolling & sliding and 10B drop', () => {
+    const directZero = zeroFrictionDeterministic(DIRECT_ARM_RAIL)
+    const env = makeEnv({ airDensityKgM3: 0, cdOverride: 0, gravityMps2: 9.81 })
+
+    const r1ARoll = solveLaunch(
+      directZero,
+      { peg: 1, flip: 0, rolling: 1, yawDeg: 0 },
+      env,
+      makeRng(1),
+      { deterministic: true }
+    )
+    expect(r1ARoll.leftCradle).toBe(true)
+    expect(r1ARoll.launchSpeedMps).toBeCloseTo(5.86, 1)
+    expect(r1ARoll.launchAngleDeg).toBeCloseTo(33.5, 0)
+    const lastSample = r1ARoll.armTraceSamples[r1ARoll.armTraceSamples.length - 1]
+    expect(lastSample.thDeg).toBeCloseTo(87.5, 0)
+    expect(r1ARoll.omegaBallRadps[1]).toBeLessThan(-150)
+
+    const r1ASlide = solveLaunch(
+      directZero,
+      { peg: 1, flip: 0, rolling: 0, yawDeg: 0 },
+      env,
+      makeRng(1),
+      { deterministic: true }
+    )
+    expect(r1ASlide.leftCradle).toBe(true)
+    expect(r1ASlide.launchSpeedMps).toBeCloseTo(5.82, 1)
+    expect(r1ASlide.launchAngleDeg).toBeCloseTo(54.5, 0)
+    expect(Math.hypot(...r1ASlide.omegaBallRadps)).toBe(0)
+
+    const r10B = solveLaunch(
+      directZero,
+      { peg: 10, flip: 1, rolling: 1, yawDeg: 0 },
+      env,
+      makeRng(1),
+      { deterministic: true }
+    )
+    expect(r10B.launchSpeedMps).toBeLessThan(r1ARoll.launchSpeedMps)
+  })
+})
+
+describe('launch_solver edge cases, cycle timing, and zero-DOM isolation', () => {
+  it('validates dt <= 0.0005 s strictly and rejects invalid dt or inputs', () => {
+    expect(validateDt(0.00025)).toBe(0.00025)
+    expect(validateDt(0.0005)).toBe(0.0005)
+    expect(() => validateDt(0)).toThrow(RangeError)
+    expect(() => validateDt(-0.0001)).toThrow(RangeError)
+    expect(() => validateDt(0.0006)).toThrow(RangeError)
+    expect(() => validateDt(Number.NaN)).toThrow(RangeError)
+
+    expect(() =>
+      solveLaunch(
+        V51_CORD_HORN,
+        defaultAdjustments(V51_CORD_HORN),
+        makeEnv({ dtS: 0.001 }),
+        makeRng(1)
+      )
+    ).toThrow(RangeError)
+  })
+
+  it('handles E = 0, trapBank.count = 0, bearingFrictionCoeff = 2.5 stall, and cordLengthOffsetMm = -25 Notch 6', () => {
+    const adj = defaultAdjustments(V51_CORD_HORN)
+
+    const zeroE = solveLaunch(V51_CORD_HORN, adj, makeEnv({ nominalEnergyJ: 0 }), makeRng(3))
+    expect(zeroE.leftCradle).toBe(false)
+    expect(zeroE.launchSpeedMps).toBe(0)
+    expect(zeroE.tReleaseS).toBeLessThan(1.0)
+
+    const zeroTraps: LauncherModel = {
+      ...V51_CORD_HORN,
+      trapBank: { ...V51_CORD_HORN.trapBank, count: 0 },
+    }
+    const rZeroTraps = solveLaunch(zeroTraps, adj, makeEnv(), makeRng(4))
+    expect(rZeroTraps.energyBudget.springInitialJ).toBe(0)
+    expect(Number.isFinite(rZeroTraps.launchSpeedMps)).toBe(true)
+
+    const highFric: LauncherModel = {
+      ...V51_CORD_HORN,
+      linkage: {
+        ...V51_CORD_HORN.linkage,
+        bearingFrictionCoeff: 2.5,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const rStall = solveLaunch(highFric, adj, makeEnv(), makeRng(5))
+    expect(rStall.leftCradle).toBe(false)
+    expect(rStall.armTraceSamples.every((s) => s.omegaArm >= -1e-6)).toBe(true)
+
+    const shortCord: LauncherModel = {
+      ...V51_CORD_HORN,
+      linkage: {
+        ...V51_CORD_HORN.linkage,
+        cordLengthOffsetMm: -25,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const rUnreach = solveLaunch(shortCord, { notch: 6, launchDeg: 42, yawDeg: 0 }, makeEnv(), makeRng(6))
+    expect(rUnreach.reachable).toBe(false)
+    expect(rUnreach.leftCradle).toBe(false)
+    expect(Number.isFinite(rUnreach.launchSpeedMps)).toBe(true)
+  })
+
+  it('supports launchDeg absent from stopAnglesDeg, excessive petal retention trapping, and yaw spin rotation', () => {
+    const customStopV51: LauncherModel = {
+      ...V51_CORD_HORN,
+      adjustments: V51_CORD_HORN.adjustments.map((a) =>
+        a.id === 'launchDeg' ? { ...a, min: 37, options: [37, 42, 50, 58] } : a
+      ),
+    }
+    const r37 = solveLaunch(
+      customStopV51,
+      { notch: 6, launchDeg: 37, yawDeg: 0 },
+      makeEnv(),
+      makeRng(7)
+    )
+    expect(r37.leftCradle).toBe(true)
+    expect(r37.launchSpeedMps).toBeGreaterThan(6.5)
+
+    const lockedPetal: LauncherModel = {
+      ...V41_TILTED_CRADLE,
+      cradle: { ...V41_TILTED_CRADLE.cradle, retentionForceN: 500 },
+    }
+    const rLocked = solveLaunch(
+      lockedPetal,
+      defaultAdjustments(lockedPetal),
+      makeEnv(),
+      makeRng(8)
+    )
+    expect(rLocked.leftCradle).toBe(false)
+
+    const yawed = solveLaunch(
+      V51_CORD_HORN,
+      { notch: 6, launchDeg: 42, yawDeg: 15 },
+      makeEnv(),
+      makeRng(9),
+      { deterministic: true }
+    )
+    expect(yawed.velMps[1]).toBeGreaterThan(0)
+    // Transverse spin remains orthogonal to horizontal velocity
+    const dotHoriz =
+      yawed.velMps[0] * yawed.omegaBallRadps[0] +
+      yawed.velMps[1] * yawed.omegaBallRadps[1]
+    expect(Math.abs(dotHoriz)).toBeLessThan(1e-9)
+  })
+
+  it('is bit-identical for identical seeds and computes cycle time from trap count', () => {
+    const env = makeEnv({ energyVarianceJ: 0.1 })
+    const adj = defaultAdjustments(V51_CORD_HORN)
+    const r1 = solveLaunch(V51_CORD_HORN, adj, env, makeRng(4242))
+    const r2 = solveLaunch(V51_CORD_HORN, adj, env, makeRng(4242))
+    expect(r1).toEqual(r2)
+
+    const rTreb = solveLaunch(
+      GRAVITY_SLING_TREBUCHET,
+      defaultAdjustments(GRAVITY_SLING_TREBUCHET),
+      env,
+      makeRng(1),
+      { deterministic: true }
+    )
+    expect(rTreb.cycleTimeS).toBeCloseTo(10.5, 6)
+    expect(rTreb.posM[2]).toBeGreaterThanOrEqual(0)
+  })
+
+  it('contains zero DOM, node:*, or third-party physics engine imports in M2 physics modules', () => {
+    const sources = import.meta.glob<string>('./*.ts', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    })
+    const m2Files = ['spring.ts', 'linkage.ts', 'launch_solver.ts']
+    const forbidden = [
+      /\bwindow\b/,
+      /\bdocument\b/,
+      /\bHTMLElement\b/,
+      /\bnode:/,
+      /cannon-es/,
+      /rapier/,
+      /ammo\.js/,
+      /matter-js/,
+    ]
+    for (const name of m2Files) {
+      const key = `./${name}`
+      expect(sources[key], `Missing ${key}`).toBeDefined()
+      for (const pat of forbidden) {
+        expect(sources[key], `${key} matched ${pat}`).not.toMatch(pat)
+      }
+    }
+  })
+})
