@@ -1,5 +1,7 @@
 # MTC-180 (`v5.1` Floor-Flush) — Rubric-Compliant 3-Mousetrap Cord-Driven Golf-Ball Catapult
 
+**Live Simulator & Rubric Evaluator:** [https://halbritt.github.io/mtc180/](https://halbritt.github.io/mtc180/)
+
 ![Complete Floor-Flush Launch Sequence: Rear Pull-String -> Gravity Sear -> Bail Stroke -> 42° CoP Stop & Golf Ball Trajectory](docs/images/mtc180_floorflush_launch.gif)
 
 Parametric [Cadpole](https://github.com/halbritt/cadpole) CAD and [CalculiX 2.23](http://www.dhondt.de/) `C3D8I` two-phase FDM PETG finite-element model engineered for strict compliance with *The Mousetrap Catapult* rubric (`Design #1–#7`, `Materials #1–#2`) and verified against `IMG_4479.jpg` physical spring-clearance photometry:
@@ -107,7 +109,7 @@ mise run sim        # Direct-drive 2-DOF rolling/sliding rail launch model acros
 
 ## Browser shot telemetry
 
-Run `npm ci` and `npm run dev` from the repository root. The field view opens
+Open [https://halbritt.github.io/mtc180/](https://halbritt.github.io/mtc180/), or run `npm ci` and `npm run dev` from the repository root. The field view opens
 with a synthetic example. Use **Import trace** to view your own completed
 trajectory. Select **Play** to follow the ball from release to rest. The slider
 pauses playback at the chosen time. Use **Speed** for half- or quarter-speed

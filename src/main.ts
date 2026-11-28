@@ -297,7 +297,7 @@ file.addEventListener('change', () => {
 
 void load(
   async () => {
-    const response = await fetch(import.meta.env.BASE_URL + 'example.json')
+    const response = await fetch('./example.json')
     if (!response.ok) throw new Error('Example data could not be retrieved.')
     return response.text()
   },
