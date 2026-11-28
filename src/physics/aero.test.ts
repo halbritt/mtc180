@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { REGULATION_GOLF_BALL } from '../models'
 import { MAX_FLIGHT_TIME_S, simulateFlight } from './aero'
 import { createNominalEnv } from './simulate'
+import { simulateTurf } from './turf'
 
 describe('aero — 3D Flight Aerodynamics (RK4)', () => {
   it('matches analytical vacuum parabola closely when airDensityKgM3=0 and cdOverride=0', () => {
@@ -141,5 +142,42 @@ describe('aero — 3D Flight Aerodynamics (RK4)', () => {
     expect(() =>
       simulateFlight(base, createNominalEnv({ dtS: 0.002 }))
     ).toThrow(RangeError)
+  })
+
+  it('handles immediate ground release (z0 <= 0, vz <= 0) and updraft-cap handoff to simulateTurf cleanly', () => {
+    const env = createNominalEnv()
+    const ground = simulateFlight(
+      { posM: [1.5, -0.2, 0], velMps: [4.0, 0, 0], omegaBallRadps: [0, 0, 0], tStartS: 0.25 },
+      env
+    )
+    expect(ground.carryDistanceM).toBe(0)
+    expect(ground.impactPosM).toEqual([1.5, -0.2, 0])
+    expect(ground.samples.at(-1)?.event).toBe('contact')
+
+    const negGround = simulateFlight(
+      { posM: [0, 0, -0.01], velMps: [3.0, 0, -1.0], omegaBallRadps: [0, 0, 0] },
+      env
+    )
+    expect(negGround.carryDistanceM).toBe(0)
+    expect(negGround.impactPosM[2]).toBe(0)
+
+    const updraftEnv = createNominalEnv({ windVecMps: [0, 0, 50], dtS: 0.0005 })
+    const updraft = simulateFlight(
+      { posM: [0, 0, 0.5], velMps: [2, 0, 5], omegaBallRadps: [0, 0, 0] },
+      updraftEnv
+    )
+    expect(updraft.impactPosM[2]).toBeGreaterThan(0)
+    const turfDrop = simulateTurf(
+      {
+        posM: updraft.impactPosM,
+        velMps: updraft.impactVelMps,
+        omegaBallRadps: updraft.omegaAtImpactRadps,
+        tStartS: updraft.tImpactS,
+      },
+      updraftEnv
+    )
+    expect(turfDrop.samples.at(-1)?.event).toBe('rest')
+    expect(turfDrop.restPosM[2]).toBe(0)
+    expect(Number.isFinite(turfDrop.rollDistanceM)).toBe(true)
   })
 })

@@ -92,4 +92,41 @@ describe('sequence — Timed Multi-Shot Events', () => {
       simulateSequence(v51, adj, env, { windowS: 100, seed: Number.NaN })
     ).toThrow(RangeError)
   })
+
+  it('handles dual targets without targetAdjustments and caps zero-cycle-time sequences at MAX_SEQUENCE_SHOTS', () => {
+    const v51 = getLauncherModel('v51_cord_horn')
+    const adj = defaultAdjustments(v51)
+    const env = createNominalEnv()
+
+    const noAdjDual = simulateSequence(v51, adj, env, {
+      windowS: 60,
+      targets: [
+        { x: 3.5, y: 0 },
+        { x: 4.5, y: 0 },
+      ],
+      targetRadiusM: 0.5,
+      seed: 7,
+    })
+    expect(noAdjDual.shotsCompleted).toBeGreaterThanOrEqual(1)
+    expect(noAdjDual.shotsAttempted).toBeGreaterThanOrEqual(noAdjDual.shotsCompleted)
+
+    const zeroCycle: LauncherModel = {
+      ...v51,
+      cycleTiming: { cockPerTrapS: 0, loadS: 0, aimAdjustS: 0, humanSigmaS: 0 },
+      tolerances: {
+        cockAngleSigmaDeg: 0,
+        seatingOffsetSigmaM: 0,
+        yawSigmaDeg: 0,
+        stopAngleSigmaDeg: 0,
+      },
+    }
+    const blockedZeroCycle = simulateSequence(
+      zeroCycle,
+      { notch: 1, launchDeg: 58, yawDeg: 0 },
+      env,
+      { windowS: 10, seed: 1 }
+    )
+    expect(blockedZeroCycle.shotsAttempted).toBe(10_000)
+    expect(blockedZeroCycle.shotsCompleted).toBe(10_000)
+  })
 })

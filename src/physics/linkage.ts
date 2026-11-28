@@ -461,7 +461,26 @@ function computeBailSweep(model: LauncherModel): BailSweepCacheEntry {
   }
 }
 
-export function buildCordLinkageTable(
+function cloneCordLinkageTable(master: CordLinkageTable): CordLinkageTable {
+  return Object.freeze({
+    cordLengthMm: master.cordLengthMm,
+    psiCockDeg: master.psiCockDeg,
+    psiStopDeg: master.psiStopDeg,
+    psiDeadDeg: master.psiDeadDeg,
+    psiEndDeg: master.psiEndDeg,
+    thCockDeg: master.thCockDeg,
+    reachable: master.reachable,
+    psisDeg: new Float64Array(master.psisDeg),
+    thOfPsiDeg: new Float64Array(master.thOfPsiDeg),
+    levBMm: new Float64Array(master.levBMm),
+    levHMm: new Float64Array(master.levHMm),
+    h1: new Float64Array(master.h1),
+    h2: new Float64Array(master.h2),
+    evalAtPsi: master.evalAtPsi,
+  })
+}
+
+export function buildCordLinkageTableInternal(
   model: LauncherModel,
   psiCockDeg: number,
   psiStopDeg: number,
@@ -548,6 +567,22 @@ export function buildCordLinkageTable(
   )
   lruSet(cordLinkageTableCache, tableKey, table, MAX_CORD_TABLE_CACHE_SIZE)
   return table
+}
+
+export function buildCordLinkageTable(
+  model: LauncherModel,
+  psiCockDeg: number,
+  psiStopDeg: number,
+  cordOffsetMmOverride?: number
+): CordLinkageTable {
+  return cloneCordLinkageTable(
+    buildCordLinkageTableInternal(
+      model,
+      psiCockDeg,
+      psiStopDeg,
+      cordOffsetMmOverride
+    )
+  )
 }
 
 function buildCordLinkageTableFromSweep(
@@ -833,7 +868,7 @@ export function computeDirectCupConfig(
     (adjustments.stopAngleDeg ?? model.linkage.thStopDeg) + stopJitterDeg
   )
   const thCockDeg = Math.max(
-    thStopDeg + 2,
+    model.trapBank.thRestDeg,
     Math.min(
       model.trapBank.thCockMaxDeg,
       (adjustments.cockAngleDeg ?? model.trapBank.thCockMaxDeg) + cockJitterDeg

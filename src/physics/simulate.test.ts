@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   defaultAdjustments,
+  DIRECT_CUP_2TRAP,
   getLauncherModel,
   LAUNCHER_MODELS,
   type LauncherModel,
@@ -91,11 +92,33 @@ describe('simulate — Full Shot Pipeline', () => {
     expect(res.rollDistanceM).toBe(0)
     expect(res.totalDistanceM).toBe(0)
     expect(res.energyEfficiencyPct).toBe(0)
+    expect(res.rubricAccuracyPts).toBe(0)
     expect(res.trace.length).toBeGreaterThanOrEqual(2)
     const m = measure(res.trace, { x: 2.0, y: 0 })
     expect(m.total).toBe(0)
 
     const v51 = getLauncherModel('v51_cord_horn')
+    const v51Blocked = simulateShot(
+      v51,
+      { notch: 1, launchDeg: 58, yawDeg: 0 },
+      createNominalEnv(),
+      { x: 0, y: 0 },
+      7
+    )
+    expect(v51Blocked.release.leftCradle).toBe(false)
+    expect(v51Blocked.rubricDistancePts).toBe(0)
+    expect(v51Blocked.rubricAccuracyPts).toBe(0)
+
+    const cupBlocked = simulateShot(
+      DIRECT_CUP_2TRAP,
+      { stopAngleDeg: 150, cockAngleDeg: 145, yawDeg: 0 },
+      createNominalEnv(),
+      { x: 0, y: 0 },
+      7
+    )
+    expect(cupBlocked.release.leftCradle).toBe(false)
+    expect(cupBlocked.rubricDistancePts).toBe(0)
+    expect(cupBlocked.rubricAccuracyPts).toBe(0)
     expect(() =>
       simulateShot(
         v51,

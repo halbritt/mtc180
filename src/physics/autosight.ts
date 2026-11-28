@@ -10,6 +10,10 @@ import { validateDt, type EnvConfig } from './launch_solver'
 import { simulateShot, type FullSimulationResult } from './simulate'
 import { validateTurfParams } from './turf'
 
+export interface AutoSightOptions {
+  frame?: 'world' | 'release'
+}
+
 export interface AutoSightResult {
   reachable: boolean
   adjustments: AdjustmentValues
@@ -116,8 +120,10 @@ function buildContinuousCombos(
 export function autoSight(
   model: LauncherModel,
   env: EnvConfig,
-  targetDistanceM: number
+  targetDistanceM: number,
+  options: AutoSightOptions = {}
 ): AutoSightResult {
+  const frame = options.frame ?? 'world'
   if (
     typeof targetDistanceM !== 'number' ||
     !Number.isFinite(targetDistanceM) ||
@@ -176,8 +182,8 @@ export function autoSight(
     }
     const rest = shot.trace[shot.trace.length - 1]
     const rel = shot.trace[0]
-    const dx = rest.x - rel.x
-    const dy = rest.y - rel.y
+    const dx = frame === 'world' ? rest.x : rest.x - rel.x
+    const dy = frame === 'world' ? rest.y : rest.y - rel.y
     let loss: number
     if (useRadial) {
       loss = Math.hypot(dx - targetDistanceM, dy)
@@ -266,8 +272,8 @@ export function autoSight(
   if (yawDef) {
     const rest = best.shot.trace[best.shot.trace.length - 1]
     const rel = best.shot.trace[0]
-    const dy = rest.y - rel.y
-    const dx = rest.x - rel.x
+    const dy = frame === 'world' ? rest.y : rest.y - rel.y
+    const dx = frame === 'world' ? rest.x : rest.x - rel.x
     if (Math.abs(dy) > 0.01 || Math.abs(env.windVecMps[1]) > 0.05) {
       const yawGuessDeg =
         dx > 0.05 ? (-Math.atan2(dy, dx) * 180) / Math.PI : 0
@@ -302,8 +308,8 @@ export function autoSight(
   const finalShot = simulateShot(cleanModel, finalAdj, nomEnv, target, 1)
   const finalRest = finalShot.trace[finalShot.trace.length - 1]
   const finalRel = finalShot.trace[0]
-  const dx = finalRest.x - finalRel.x
-  const dy = finalRest.y - finalRel.y
+  const dx = frame === 'world' ? finalRest.x : finalRest.x - finalRel.x
+  const dy = frame === 'world' ? finalRest.y : finalRest.y - finalRel.y
   const predictedDistanceM = dx
   const errorM = Math.hypot(dx - targetDistanceM, dy)
   const toleranceM = Math.max(0.5, 0.12 * targetDistanceM)

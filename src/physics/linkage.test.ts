@@ -12,6 +12,7 @@ import {
 import {
   bailSide,
   buildCordLinkageTable,
+  buildCordLinkageTableInternal,
   camSide,
   clearCordLinkageCache,
   computeDirectCupConfig,
@@ -25,6 +26,8 @@ import {
   hornSide,
   type CordLinkageTable,
 } from './linkage'
+import { solveLaunch } from './launch_solver'
+import { createNominalEnv, createSeededRng } from './simulate'
 
 describe('linkage kinematics across all 7 topologies', () => {
   it('supports 1-arg hornSide(psiDeg) and computeHornLeverArmMm with dead-center near 53 deg', () => {
@@ -207,8 +210,13 @@ describe('buildCordLinkageTable memoization & LRU cache', () => {
       const snap = snapshotTable(cold, probePsis)
 
       const warm = buildCordLinkageTable(c.model, c.psiCock, c.psiStop, c.offset)
-      expect(warm).toBe(cold)
+      expect(warm).not.toBe(cold)
       expectBitIdenticalTable(warm, snap, probePsis)
+
+      const internal1 = buildCordLinkageTableInternal(c.model, c.psiCock, c.psiStop, c.offset)
+      const internal2 = buildCordLinkageTableInternal(c.model, c.psiCock, c.psiStop, c.offset)
+      expect(internal2).toBe(internal1)
+      expectBitIdenticalTable(internal2, snap, probePsis)
 
       clearCordLinkageCache()
       const rebuilt = buildCordLinkageTable(c.model, c.psiCock, c.psiStop, c.offset)
@@ -273,17 +281,17 @@ describe('buildCordLinkageTable memoization & LRU cache', () => {
     clearCordLinkageCache()
     const { maxTableCacheSize, maxBailSweepCacheSize } = getCordLinkageCacheStats()
 
-    const entry0 = buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)
-    const entry1 = buildCordLinkageTable(V51_CORD_HORN, -8.19, 48.0)
+    const entry0 = buildCordLinkageTableInternal(V51_CORD_HORN, -8.2, 48.0)
+    const entry1 = buildCordLinkageTableInternal(V51_CORD_HORN, -8.19, 48.0)
     for (let i = 2; i < maxTableCacheSize; i++) {
-      buildCordLinkageTable(V51_CORD_HORN, -8.2 + i * 0.01, 48.0)
+      buildCordLinkageTableInternal(V51_CORD_HORN, -8.2 + i * 0.01, 48.0)
     }
 
     // Refresh entry1 mid-way so entry0 becomes the least-recently-used entry
-    expect(buildCordLinkageTable(V51_CORD_HORN, -8.19, 48.0)).toBe(entry1)
+    expect(buildCordLinkageTableInternal(V51_CORD_HORN, -8.19, 48.0)).toBe(entry1)
 
     for (let i = maxTableCacheSize; i < maxTableCacheSize + 20; i++) {
-      buildCordLinkageTable(V51_CORD_HORN, -8.2 + i * 0.01, 48.0)
+      buildCordLinkageTableInternal(V51_CORD_HORN, -8.2 + i * 0.01, 48.0)
     }
 
     const stats = getCordLinkageCacheStats()
@@ -291,8 +299,8 @@ describe('buildCordLinkageTable memoization & LRU cache', () => {
     expect(stats.bailSweepCacheSize).toBeLessThanOrEqual(maxBailSweepCacheSize)
 
     // Refreshed entry stayed cached; untouched oldest entry was evicted
-    expect(buildCordLinkageTable(V51_CORD_HORN, -8.19, 48.0)).toBe(entry1)
-    expect(buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)).not.toBe(entry0)
+    expect(buildCordLinkageTableInternal(V51_CORD_HORN, -8.19, 48.0)).toBe(entry1)
+    expect(buildCordLinkageTableInternal(V51_CORD_HORN, -8.2, 48.0)).not.toBe(entry0)
 
     // Verify Level-1 bailSweepCache bound and LRU eviction
     clearCordLinkageCache()
@@ -308,5 +316,50 @@ describe('buildCordLinkageTable memoization & LRU cache', () => {
       buildCordLinkageTable(cloned, -8.2, 48.0)
     }
     expect(getCordLinkageCacheStats().bailSweepCacheSize).toBe(maxBailSweepCacheSize)
+  })
+
+  it('prevents external Float64Array mutation from poisoning cached tables or solveLaunch', () => {
+    clearCordLinkageCache()
+    const env = createNominalEnv({ deterministic: true })
+    const baseline = solveLaunch(V51_CORD_HORN, { notch: 6, launchDeg: 42, yawDeg: 0 }, env, createSeededRng(1))
+
+    const publicTable = buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)
+    const snap = snapshotTable(publicTable, [-8.2, 0, 20, 48])
+
+    // Attempt to poison every Float64Array buffer on the returned public table
+    publicTable.psisDeg.fill(-999)
+    publicTable.thOfPsiDeg.fill(7.0)
+    publicTable.levBMm.fill(0)
+    publicTable.levHMm.fill(0)
+    publicTable.h1.fill(0)
+    publicTable.h2.fill(999)
+
+    // Even evalAtPsi on the mutated wrapper reads immutable master buffers
+    expect(Object.is(publicTable.evalAtPsi(20).thDeg, snap.evals[2].thDeg)).toBe(true)
+
+    const freshPublic = buildCordLinkageTable(V51_CORD_HORN, -8.2, 48.0)
+    expectBitIdenticalTable(freshPublic, snap, [-8.2, 0, 20, 48])
+
+    const afterPoison = solveLaunch(V51_CORD_HORN, { notch: 6, launchDeg: 42, yawDeg: 0 }, env, createSeededRng(1))
+    expect(afterPoison.leftCradle).toBe(true)
+    expect(afterPoison.launchSpeedMps).toBe(baseline.launchSpeedMps)
+  })
+
+  it('preserves user cockAngleDeg in computeDirectCupConfig when stopAngleDeg >= cockAngleDeg', () => {
+    const blocked = computeDirectCupConfig(DIRECT_CUP_2TRAP, {
+      stopAngleDeg: 150,
+      cockAngleDeg: 145,
+      yawDeg: 0,
+    })
+    expect(blocked.thStopDeg).toBe(150)
+    expect(blocked.thCockDeg).toBe(145)
+
+    const equal = computeDirectCupConfig(DIRECT_CUP_2TRAP, {
+      stopAngleDeg: 145,
+      cockAngleDeg: 145,
+      yawDeg: 0,
+    })
+    expect(equal.thStopDeg).toBe(145)
+    expect(equal.thCockDeg).toBe(145)
   })
 })

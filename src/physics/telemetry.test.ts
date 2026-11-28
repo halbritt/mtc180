@@ -95,4 +95,13 @@ describe('measure', () => {
       ])
     ).toThrow(/range/)
   })
+
+  it('rejects single-sample trace with contact only (missing rest) or rest only (missing contact)', () => {
+    expect(() =>
+      measure([{ t: 0, x: 1, y: 2, z: 0, event: 'contact' }])
+    ).toThrow(/rest/)
+    expect(() =>
+      measure([{ t: 0, x: 1, y: 2, z: 0, event: 'rest' }])
+    ).toThrow(/contact/)
+  })
 })

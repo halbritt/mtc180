@@ -664,6 +664,107 @@ describe('launch_solver edge cases, cycle timing, and zero-DOM isolation', () =>
     expect(treb0Err, `treb cock=0 err=${treb0Err}`).toBeLessThan(0.001)
   })
 
+  it('returns leftCradle=false, speed=0 on direct_cup when stopAngleDeg >= cockAngleDeg and conserves energy across full DOF sweeps', () => {
+    const env = makeEnv()
+
+    for (const stopAngleDeg of [145, 150]) {
+      const blocked = solveLaunch(
+        DIRECT_CUP_2TRAP,
+        { stopAngleDeg, cockAngleDeg: 145, yawDeg: 0 },
+        env,
+        makeRng(301),
+        { deterministic: true }
+      )
+      expect(blocked.leftCradle).toBe(false)
+      expect(blocked.launchSpeedMps).toBe(0)
+      expect(blocked.reachable).toBe(false)
+      expect(blocked.energyBudget.springInitialJ).toBe(0)
+      expect(sumEnergy(blocked.energyBudget)).toBe(0)
+    }
+
+    // 81-corner DOF sweep on GRAVITY_SLING_TREBUCHET (including negative launch angles at pin=15..35)
+    let sawNegativeAngle = false
+    for (const counterweightKg of [0.6, 1.0, 1.6]) {
+      for (const dropHeightM of [0.18, 0.25, 0.32]) {
+        for (const slingLengthM of [0.24, 0.32, 0.4]) {
+          for (const releasePinAngleDeg of [15, 35, 55]) {
+            const rel = solveLaunch(
+              GRAVITY_SLING_TREBUCHET,
+              { counterweightKg, dropHeightM, slingLengthM, releasePinAngleDeg, yawDeg: 0 },
+              env,
+              makeRng(302),
+              { deterministic: true }
+            )
+            expect(Number.isFinite(rel.launchSpeedMps)).toBe(true)
+            expect(Number.isFinite(rel.launchAngleDeg)).toBe(true)
+            if (rel.leftCradle && rel.launchAngleDeg < 0) sawNegativeAngle = true
+            if (rel.energyBudget.springInitialJ > 1e-6) {
+              const err =
+                Math.abs(sumEnergy(rel.energyBudget) - rel.energyBudget.springInitialJ) /
+                rel.energyBudget.springInitialJ
+              expect(err).toBeLessThan(0.01)
+            }
+          }
+        }
+      }
+    }
+    expect(sawNegativeAngle).toBe(true)
+
+    // Full DOF corner sweeps on inclined_ramp, tilted_cradle, circular_cam, and cord_horn
+    for (const rampAngleDeg of [28, 40, 52]) {
+      for (const cockAngleDeg of [100, 135, 171]) {
+        const rel = solveLaunch(
+          FLOOR_FLUSH_INCLINED_RAMP,
+          { rampAngleDeg, cockAngleDeg, yawDeg: 0 },
+          env,
+          makeRng(303),
+          { deterministic: true }
+        )
+        expect(Number.isFinite(rel.launchSpeedMps)).toBe(true)
+        const err =
+          Math.abs(sumEnergy(rel.energyBudget) - rel.energyBudget.springInitialJ) /
+          rel.energyBudget.springInitialJ
+        expect(err).toBeLessThan(0.01)
+      }
+    }
+
+    for (const launchDeg of [10, 42, 80]) {
+      for (const stopDeg of [7, 11, 15]) {
+        const rel = solveLaunch(
+          V41_TILTED_CRADLE,
+          { launchDeg, stopDeg, yawDeg: 0 },
+          env,
+          makeRng(304),
+          { deterministic: true }
+        )
+        expect(Number.isFinite(rel.launchSpeedMps)).toBe(true)
+        const err =
+          Math.abs(sumEnergy(rel.energyBudget) - rel.energyBudget.springInitialJ) /
+          rel.energyBudget.springInitialJ
+        expect(err).toBeLessThan(0.01)
+      }
+    }
+
+    for (const model of [V50_CIRCULAR_CAM, V51_CORD_HORN]) {
+      const notchOpt = model.adjustments.find((a) => a.id === 'notch')!.options!
+      const stopOpt = model.adjustments.find((a) => a.id === 'launchDeg')!.options!
+      for (const notch of notchOpt) {
+        for (const launchDeg of stopOpt) {
+          const rel = solveLaunch(model, { notch, launchDeg, yawDeg: 0 }, env, makeRng(305), {
+            deterministic: true,
+          })
+          expect(Number.isFinite(rel.launchSpeedMps)).toBe(true)
+          if (rel.energyBudget.springInitialJ > 1e-6) {
+            const err =
+              Math.abs(sumEnergy(rel.energyBudget) - rel.energyBudget.springInitialJ) /
+              rel.energyBudget.springInitialJ
+            expect(err).toBeLessThan(0.01)
+          }
+        }
+      }
+    }
+  })
+
   it('contains zero DOM, node:*, or third-party physics engine imports in M2 physics modules', () => {
     const sources = import.meta.glob<string>('./*.ts', {
       query: '?raw',

@@ -235,4 +235,68 @@ describe('montecarlo — Pure Monte Carlo Engine', () => {
       expect(src).not.toMatch(/\b(window|document|HTMLElement)\b/)
     }
   })
+
+  it('matches simulateShot under MAX_FLIGHT_TIME_S updraft cap, handles collinear CEP, and guards prototype keys', () => {
+    const v51 = getLauncherModel('v51_cord_horn')
+    const adj = { notch: 6, launchDeg: 42, yawDeg: 0 }
+    const updraftEnv = createNominalEnv({
+      windVecMps: [0, 0, 50],
+      turfScatterSigmaRad: 0,
+      dtS: 0.0005,
+    })
+    const baseSeed = 77
+    const trialSeed = deriveTrialSeed(baseSeed, 0, 0)
+    const directShot = simulateShot(v51, adj, updraftEnv, { x: 4, y: 0 }, trialSeed)
+    const [mcUpdraft] = runMonteCarlo({
+      jobId: 'updraft-parity',
+      models: [v51],
+      adjustmentsByModel: { [v51.id]: adj },
+      env: updraftEnv,
+      rubricConfig: { task: 'day1_distance', target: { x: 4, y: 0 } },
+      trialsPerModel: 1,
+      baseSeed,
+    })
+    const rest = directShot.trace[directShot.trace.length - 1]
+    expect(mcUpdraft.landings[0].restX).toBeCloseTo(rest.x, 12)
+    expect(mcUpdraft.landings[0].restY).toBeCloseTo(rest.y, 12)
+    expect(mcUpdraft.landings[0].carryM).toBeCloseTo(directShot.carryDistanceM, 12)
+    expect(mcUpdraft.landings[0].totalM).toBeCloseTo(directShot.totalDistanceM, 12)
+
+    // Collinear dispersion along x-axis only (y = 0 across all trials)
+    const zeroYawModel: LauncherModel = {
+      ...v51,
+      tolerances: {
+        cockAngleSigmaDeg: 0,
+        seatingOffsetSigmaM: 0,
+        yawSigmaDeg: 0,
+        stopAngleSigmaDeg: 0,
+      },
+    }
+    const [collinear] = runMonteCarlo({
+      jobId: 'collinear-cep',
+      models: [zeroYawModel],
+      adjustmentsByModel: { [zeroYawModel.id]: adj },
+      env: createNominalEnv({ energyVarianceJ: 0.25, turfScatterSigmaRad: 0 }),
+      rubricConfig: { task: 'day1_distance' },
+      trialsPerModel: 40,
+      baseSeed: 314,
+    })
+    expect(collinear.cep95Ellipse.semiMajorM).toBeGreaterThan(0.05)
+    expect(collinear.cep95Ellipse.semiMinorM).toBe(0)
+    expect(collinear.cep95Ellipse.angleRad).toBe(0)
+
+    // Prototype key lookup safety in adjustmentsByModel
+    const protoModel: LauncherModel = { ...v51, id: 'toString' }
+    const [protoRes] = runMonteCarlo({
+      jobId: 'proto-key',
+      models: [protoModel],
+      adjustmentsByModel: {},
+      env: createNominalEnv({ energyVarianceJ: 0, turfScatterSigmaRad: 0 }),
+      rubricConfig: { task: 'day1_distance' },
+      trialsPerModel: 2,
+      baseSeed: 1,
+    })
+    expect(protoRes.modelId).toBe('toString')
+    expect(Number.isFinite(protoRes.meanScore)).toBe(true)
+  })
 })

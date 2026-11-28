@@ -88,6 +88,13 @@ describe('launcher model registry and coverage', () => {
       'direct_arm_1trap',
       'direct_arm_2trap',
     ])
+
+    expect(listLauncherModels({ equipmentBonus: 'both' }).map((m) => m.id)).toEqual([
+      'gravity_sling_trebuchet',
+    ])
+    expect(listLauncherModels({ equipmentBonus: 'ball' }).length).toBeGreaterThanOrEqual(8)
+    expect(listLauncherModels({ equipmentBonus: 'trebuchet' })).toEqual([])
+    expect(listLauncherModels({ equipmentBonus: 'none' })).toEqual([])
   })
 
   it('matches regulation golf ball inertia I = 0.4 * m * R^2', () => {
@@ -458,6 +465,43 @@ describe('validateLauncherModel error rejection', () => {
       },
     }
     expect(() => validateLauncherModel(fakeBallBonus)).toThrow(RangeError)
+
+    const dupAdj: LauncherModel = {
+      ...V51_CORD_HORN,
+      adjustments: [V51_CORD_HORN.adjustments[0], V51_CORD_HORN.adjustments[0]],
+    }
+    expect(() => validateLauncherModel(dupAdj)).toThrow(/duplicate/i)
+
+    const badOptionLabels: LauncherModel = {
+      ...DIRECT_ARM_RAIL,
+      adjustments: DIRECT_ARM_RAIL.adjustments.map((a) =>
+        a.id === 'flip' ? { ...a, optionLabels: ['OnlyOne'] } : a
+      ),
+    }
+    expect(() => validateLauncherModel(badOptionLabels)).toThrow(RangeError)
+
+    if (V51_CORD_HORN.linkage.kind === 'cord_horn') {
+      const missingStopHole: LauncherModel = {
+        ...V51_CORD_HORN,
+        linkage: {
+          ...V51_CORD_HORN.linkage,
+          stopHolesMm: { 42: [-120.9, 134.1], 50: [-131.8, 129.8] },
+        },
+      }
+      expect(() => validateLauncherModel(missingStopHole)).toThrow(/stopHolesMm/)
+
+      const badTieIdxLow: LauncherModel = {
+        ...V51_CORD_HORN,
+        linkage: { ...V51_CORD_HORN.linkage, cordTieNotchIndex: -1 },
+      }
+      expect(() => validateLauncherModel(badTieIdxLow)).toThrow(RangeError)
+
+      const badTieIdxHigh: LauncherModel = {
+        ...V51_CORD_HORN,
+        linkage: { ...V51_CORD_HORN.linkage, cordTieNotchIndex: 99 },
+      }
+      expect(() => validateLauncherModel(badTieIdxHigh)).toThrow(RangeError)
+    }
   })
 })
 
@@ -555,6 +599,11 @@ describe('validateAndClampAdjustments', () => {
     expect(snapped.micro).toBeGreaterThanOrEqual(1e-11)
     expect(snapped.micro).toBeLessThanOrEqual(2e-11)
     expect(snapped.micro).toBeCloseTo(1.5e-11, 22)
+
+    const zeroNorm = validateAndClampAdjustments(V51_CORD_HORN, { yawDeg: -0 })
+    expect(Object.is(zeroNorm.yawDeg, +0)).toBe(true)
+    const nearZeroNorm = validateAndClampAdjustments(V51_CORD_HORN, { yawDeg: -0.1 })
+    expect(Object.is(nearZeroNorm.yawDeg, +0)).toBe(true)
   })
 })
 

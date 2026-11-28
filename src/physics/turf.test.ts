@@ -140,4 +140,31 @@ describe('turf — Grassy Field Impact, Bounce & Rollout', () => {
       validateTurfParams({ en: 0.3, muR: 0.1, scatterSigmaRad: -0.01 })
     ).toThrow(RangeError)
   })
+
+  it('handles ultra-low muR=0.001 timeout cap, en=1.0 multi-bounce loop cap, and airborne z>0, vz>0 drop cleanly', () => {
+    const lowMu = simulateTurf(
+      { posM: [0, 0, 0], velMps: [25, 0, -0.5], omegaBallRadps: [0, 0, 0], tStartS: 0.2 },
+      createNominalEnv({ turfEn: 0, turfMuR: 0.001, turfScatterSigmaRad: 0, dtS: 0.0005 })
+    )
+    expect(lowMu.samples.at(-1)?.event).toBe('rest')
+    expect(Number.isFinite(lowMu.rollDistanceM)).toBe(true)
+    expect(lowMu.tRestS).toBeLessThanOrEqual(65)
+
+    const elasticBounce = simulateTurf(
+      { posM: [0, 0, 0], velMps: [4, 0, -5], omegaBallRadps: [0, 0, 0], tStartS: 0.2 },
+      createNominalEnv({ turfEn: 1.0, turfMuR: 0.15, turfScatterSigmaRad: 0, dtS: 0.0005 })
+    )
+    expect(elasticBounce.samples.at(-1)?.event).toBe('rest')
+    expect(elasticBounce.bouncePoints.length).toBeGreaterThan(5)
+    expect(elasticBounce.bouncePoints.length).toBeLessThanOrEqual(32)
+
+    const airborne = simulateTurf(
+      { posM: [1, 0, 0.5], velMps: [3, 0, 2.5], omegaBallRadps: [0, 0, 0], tStartS: 0.1 },
+      createNominalEnv({ turfEn: 0.3, turfMuR: 0.15, turfScatterSigmaRad: 0 })
+    )
+    expect(airborne.samples[0].z).toBeGreaterThan(0)
+    expect(airborne.samples.some((s) => s.event === 'contact')).toBe(true)
+    expect(airborne.samples.at(-1)?.event).toBe('rest')
+    expect(airborne.restPosM[0]).toBeGreaterThan(1)
+  })
 })

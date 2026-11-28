@@ -140,6 +140,37 @@ describe('spring mechanics (Test 1: Spring Work Integration)', () => {
         makeRng(1)
       )
     ).toBe(0)
+
+    const perTrapUniform = Array.from({ length: 100 }, (_, i) =>
+      sampleSpringBankEnergy(
+        V51_CORD_HORN,
+        { nominalEnergyJ: 2.12, energyVarianceJ: 0.15, energyDistribution: 'uniform' },
+        makeRng(500 + i),
+        true
+      )
+    )
+    expect(Math.min(...perTrapUniform)).toBeGreaterThanOrEqual(2.12 - 0.15)
+    expect(Math.max(...perTrapUniform)).toBeLessThanOrEqual(2.12 + 0.15)
+    expect(new Set(perTrapUniform.map((x) => x.toFixed(6))).size).toBeGreaterThan(20)
+
+    const perTrapGauss = Array.from({ length: 100 }, (_, i) =>
+      sampleSpringBankEnergy(
+        V51_CORD_HORN,
+        { nominalEnergyJ: 2.12, energyVarianceJ: 0.15, energyDistribution: 'gaussian' },
+        makeRng(900 + i),
+        true
+      )
+    )
+    expect(perTrapGauss.every((e) => Number.isFinite(e) && e >= 0)).toBe(true)
+    expect(new Set(perTrapGauss.map((x) => x.toFixed(6))).size).toBeGreaterThan(20)
+
+    const oneTrapPerTrap = sampleSpringBankEnergy(
+      DIRECT_ARM_1TRAP,
+      { nominalEnergyJ: 2.12, energyVarianceJ: 0.1, energyDistribution: 'uniform' },
+      makeRng(77),
+      true
+    )
+    expect(oneTrapPerTrap).toBeGreaterThan(0)
   })
 
   it('validates invalid spring parameters cleanly', () => {

@@ -120,10 +120,8 @@ export function simulateShot(
       { t: t0 + 0.001, x: x0, y: y0, z: 0, event: 'contact' },
       { t: t0 + 0.002, x: x0, y: y0, z: 0, event: 'rest' },
     ]
-    const m = measure(trace, target)
     const rubricDistancePts = distancePoints(0)
-    const rubricAccuracyPts =
-      m.radialError !== null && m.radialError <= 0.5 ? 5 : 0
+    const rubricAccuracyPts = 0
     return {
       trace,
       release,

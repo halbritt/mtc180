@@ -452,13 +452,46 @@ function simulateFlightAndTurfLean(
     }
   }
 
-  const carryM = Math.hypot(state.x - x0, state.y - y0)
-
-  // Turf impact + bounces + rollout (identical to simulateTurf without Sample[] allocation)
   let t = tImpactS
   let elapsed = 0
   let nextSampleElapsed = 0.005
   lastSampleT = t
+
+  if (state.z > 1e-6) {
+    const maxDropSteps = Math.ceil(60 / dtS)
+    for (let step = 0; step < maxDropSteps; step++) {
+      copyAeroState(prev, state)
+      const tPrev = t
+      stepAeroRk4InPlace(state, aeroParams, dtS, aeroWs)
+      t += dtS
+      elapsed += dtS
+      if (state.z <= 0) {
+        const alpha = solveGroundImpactFromPrev(
+          prev,
+          state.z,
+          dtS,
+          aeroParams,
+          aeroWs,
+          hitState
+        )
+        copyAeroState(state, hitState)
+        t = Math.max(lastSampleT + 1e-9, tPrev + alpha * dtS)
+        break
+      }
+      if (elapsed >= nextSampleElapsed) {
+        lastSampleT = t
+        nextSampleElapsed = elapsed + (elapsed > 15 ? 0.02 : 0.005)
+      }
+    }
+    state.z = 0
+    t = Math.max(t, lastSampleT + 1e-9)
+    lastSampleT = t
+    nextSampleElapsed = elapsed + 0.005
+  }
+
+  const carryM = Math.hypot(state.x - x0, state.y - y0)
+
+  // Turf impact + bounces + rollout (identical to simulateTurf without Sample[] allocation)
   let lastRollSampleX = state.x
   let lastRollSampleY = state.y
   let rollout = 0
@@ -692,7 +725,9 @@ export function runMonteCarlo(
 
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
     const model = models[mIdx]
-    const rawAdj = adjustmentsByModel[model.id] ?? {}
+    const rawAdj = Object.hasOwn(adjustmentsByModel, model.id)
+      ? adjustmentsByModel[model.id]
+      : {}
     const adjustments = validateAndClampAdjustments(model, rawAdj)
     const projectile = model.projectile ?? REGULATION_GOLF_BALL
     const aeroParams = buildAeroParams(mcEnv, projectile)

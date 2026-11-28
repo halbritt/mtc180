@@ -182,4 +182,23 @@ describe('individual adjustments', () => {
     for (const invalid of invalidCases)
       expect(() => evaluateRubric(invalid)).toThrow()
   })
+
+  it('handles 6 * Number.EPSILON float sum tolerance in groupShares and preserves -0 normalization', () => {
+    const floatShares = evaluateRubric({
+      ...full,
+      groupShares: [0.1, 0.2, 5.7],
+    })
+    expect(floatShares.groupBonuses).toEqual([0.1, 0.2, 5.7])
+
+    const negZero = evaluateRubric({
+      ...full,
+      distanceM: -0,
+      lateDays: -0,
+      groupShares: [-0, 6],
+    })
+    expect(Object.is(negZero.distance, -0)).toBe(true)
+    expect(negZero.lateAdjustment).toBe(0)
+    expect(Object.is(negZero.groupBonuses?.[0], -0)).toBe(true)
+    expect(negZero.individualTotals).toEqual([100, 106])
+  })
 })

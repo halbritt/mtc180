@@ -131,6 +131,7 @@ export function mountShootoutPanel(opts: ShootoutPanelOptions) {
         } else if (msg.type === 'done') {
           progressBar.hidden = true
           runBtn.disabled = false
+          activeJobId = ''
           const results = msg.results ?? []
           statusEl.textContent = `Completed ${msg.total} trials across ${results.length} designs.`
           renderTable(results)
@@ -143,6 +144,7 @@ export function mountShootoutPanel(opts: ShootoutPanelOptions) {
         } else if (msg.type === 'error') {
           progressBar.hidden = true
           runBtn.disabled = false
+          activeJobId = ''
           errEl.textContent = msg.error ?? 'Monte Carlo worker failed.'
           errEl.hidden = false
           statusEl.textContent = 'Error'
@@ -154,6 +156,9 @@ export function mountShootoutPanel(opts: ShootoutPanelOptions) {
         errEl.textContent = err.message || 'Monte Carlo worker crashed.'
         errEl.hidden = false
         statusEl.textContent = 'Error'
+        worker?.terminate()
+        worker = undefined
+        activeJobId = ''
       }
     }
     return worker

@@ -5,7 +5,7 @@ import {
 } from '../models'
 import {
   bailSide,
-  buildCordLinkageTable,
+  buildCordLinkageTableInternal,
   computeDirectCupConfig,
   computeDirectRailConfig,
   computeInclinedRampConfig,
@@ -258,9 +258,13 @@ function solveCordLinkageLaunch(
 
   // Apply cocking jitter while keeping cord cockable if nominal notch was reachable
   let psiCockDeg = psiNominalCock + cockJitterDeg
-  let table = buildCordLinkageTable(model, psiCockDeg, psiStopDeg)
+  let table = buildCordLinkageTableInternal(model, psiCockDeg, psiStopDeg)
   if (!table.reachable && cockJitterDeg !== 0) {
-    const nomTable = buildCordLinkageTable(model, psiNominalCock, psiStopDeg)
+    const nomTable = buildCordLinkageTableInternal(
+      model,
+      psiNominalCock,
+      psiStopDeg
+    )
     if (nomTable.reachable) {
       psiCockDeg = psiNominalCock
       table = nomTable
@@ -1355,6 +1359,42 @@ function solveCoaxialCupOrTiltedLaunch(
     }
   }
 
+  if (thCockDeg <= thStopDeg) {
+    const bpBlocked = ballPos(thCockDeg)
+    return {
+      tReleaseS: 0,
+      posM: rotateSagittalToWorld(bpBlocked.x, bpBlocked.z, yawRad),
+      velMps: [0, 0, 0],
+      omegaBallRadps: [0, 0, 0],
+      energyBudget: {
+        springInitialJ: 0,
+        keTransBallJ: 0,
+        keRotBallJ: 0,
+        keRotArmBailsJ: 0,
+        peGravityDeltaJ: 0,
+        frictionLossJ: 0,
+      },
+      wastedStopKeJ: 0,
+      leftCradle: false,
+      launchSpeedMps: 0,
+      launchAngleDeg: 0,
+      armTraceSamples: [
+        {
+          t: 0,
+          psiDeg: isTilted ? tiltedCfg!.alphaTrapFrontDeg + thCockDeg : 90 - thCockDeg,
+          thDeg: thCockDeg,
+          omegaArm: 0,
+        },
+      ],
+      cycleTimeS,
+      cockedBallBottomHeightM,
+      cordSlackAtDeg: null,
+      reachable: false,
+      springTotalStoredJ: 0,
+      springResidualPeJ: 0,
+    }
+  }
+
   const totalPe = (thDeg: number) => {
     const a = worldAngleRad(thDeg)
     const bp = ballPos(thDeg)
@@ -1440,7 +1480,7 @@ function solveCoaxialCupOrTiltedLaunch(
   const maxSteps = Math.ceil(MAX_SIM_TIME_S / dtS) + 2
   for (let step = 0; step < maxSteps; step++) {
     if (th <= thStopDeg) {
-      leftCradle = true
+      leftCradle = w > 0
       break
     }
 

@@ -57,6 +57,7 @@ type TraceState = {
 }
 let current: TraceState | undefined
 let shotSeedCounter = 0
+let currentRequest = 0
 
 const practice = mountPractice((target) => {
   if (current) {
@@ -83,6 +84,7 @@ function displaySimulatedShot(
   target: Target,
   trialName: string
 ) {
+  currentRequest++
   const measurements = measure(shot.trace, target)
   const traceState: TraceState = {
     samples: shot.trace,
@@ -136,6 +138,7 @@ const simControls = mountModelControls({
     field?.setLauncher(model, adj)
   },
   onAdjustmentPreview(model, adj) {
+    currentRequest++
     const target = { x: simControls.getTargetDistanceM(), y: 0 }
     const previewEnv = {
       ...simControls.getEnv(),
@@ -143,15 +146,21 @@ const simControls = mountModelControls({
       turfScatterSigmaRad: 0,
       deterministic: true,
     }
-    const shot = simulateShot(model, adj, previewEnv, target, 1)
-    displaySimulatedShot(
-      shot,
-      model,
-      adj,
-      false,
-      target,
-      `${model.id} preview`
-    )
+    try {
+      const shot = simulateShot(model, adj, previewEnv, target, 1)
+      displaySimulatedShot(
+        shot,
+        model,
+        adj,
+        false,
+        target,
+        `${model.id} preview`
+      )
+    } catch (err) {
+      errorBox.textContent =
+        'Preview failed. ' + (err instanceof Error ? err.message : String(err))
+      errorBox.hidden = false
+    }
   },
   onEnvChange() {
     // Environment edits take effect on subsequent Launch / Auto-Sight / Shootout runs.
@@ -177,6 +186,7 @@ const simControls = mountModelControls({
     }
   },
   onLaunch(model, adj) {
+    currentRequest++
     shotSeedCounter++
     const target = { x: simControls.getTargetDistanceM(), y: 0 }
     try {
@@ -261,7 +271,6 @@ camera.addEventListener('change', () => {
 
 mountScorecard()
 
-let currentRequest = 0
 async function load(
   read: () => Promise<string>,
   name: string,

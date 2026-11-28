@@ -27,10 +27,11 @@ export function mountReplay(
     time.setAttribute('aria-valuetext', readout)
   }
 
-  function stop() {
+  function stop(notify = false) {
     if (frame !== undefined) cancelAnimationFrame(frame)
     frame = undefined
     toggle.textContent = elapsed >= duration ? 'Replay' : 'Play'
+    if (notify) onPlayToggle?.(false)
   }
 
   function advance(now: number) {
@@ -42,15 +43,14 @@ export function mountReplay(
 
   function animate(now: number) {
     advance(now)
-    if (elapsed >= duration) stop()
+    if (elapsed >= duration) stop(true)
     else frame = requestAnimationFrame(animate)
   }
 
   toggle.addEventListener('click', () => {
     if (frame !== undefined) {
       advance(performance.now())
-      stop()
-      onPlayToggle?.(false)
+      stop(true)
       return
     }
     if (elapsed >= duration) seek(0)
@@ -61,7 +61,7 @@ export function mountReplay(
   })
   time.addEventListener('input', () => {
     seek(time.valueAsNumber)
-    stop()
+    stop(true)
   })
   speed.addEventListener('change', () => {
     if (frame !== undefined) advance(performance.now())
@@ -70,12 +70,12 @@ export function mountReplay(
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && frame !== undefined) {
       advance(performance.now())
-      stop()
+      stop(true)
     }
   })
 
   return (samples: readonly Sample[]) => {
-    stop()
+    stop(false)
     trace = samples
     duration = samples[samples.length - 1].t - samples[0].t
     controls.hidden = !Number.isFinite(duration) || duration <= 0
