@@ -122,6 +122,8 @@ export interface TrebuchetKinematics {
   readonly th0Rad: number
   readonly beta0Rad: number
   readonly troughCenterZM: number
+  readonly startsInTrough: boolean
+  readonly zBall0M: number
   readonly cockedBallBottomHeightM: number
 }
 
@@ -776,15 +778,16 @@ export function computeTrebuchetConfig(
   const kCwM = dropHeightM / (1 - Math.sin(th0Rad))
   const troughBottomZM = lk.troughBottomZMm * 1e-3
   const troughCenterZM = troughBottomZM + model.projectile.radiusM
-  const sinB0 = Math.max(
-    -0.99,
-    Math.min(
-      0.99,
-      (lk.pivotHeightM + lk.throwingArmM * Math.sin(th0Rad) - troughCenterZM) /
-        slingLengthM
-    )
-  )
+  const sinB0Raw =
+    (lk.pivotHeightM + lk.throwingArmM * Math.sin(th0Rad) - troughCenterZM) /
+    slingLengthM
+  const startsInTrough = sinB0Raw >= -0.99 && sinB0Raw <= 0.99
+  const sinB0 = Math.max(-0.99, Math.min(0.99, sinB0Raw))
   const beta0Rad = Math.PI - Math.asin(sinB0)
+  const zBall0M =
+    lk.pivotHeightM +
+    lk.throwingArmM * Math.sin(th0Rad) -
+    slingLengthM * Math.sin(beta0Rad)
 
   return {
     counterweightMassKg,
@@ -799,6 +802,10 @@ export function computeTrebuchetConfig(
     th0Rad,
     beta0Rad,
     troughCenterZM,
-    cockedBallBottomHeightM: troughBottomZM,
+    startsInTrough,
+    zBall0M,
+    cockedBallBottomHeightM: startsInTrough
+      ? troughBottomZM
+      : zBall0M - model.projectile.radiusM,
   }
 }

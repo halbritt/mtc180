@@ -86,7 +86,25 @@ describe('linkage kinematics across all 7 topologies', () => {
       GRAVITY_SLING_TREBUCHET,
       defaultAdjustments(GRAVITY_SLING_TREBUCHET)
     )
+    expect(treb.startsInTrough).toBe(true)
+    expect(treb.zBall0M).toBeCloseTo(treb.troughCenterZM, 6)
     expect(treb.cockedBallBottomHeightM).toBeCloseTo(0.022, 6)
     expect(treb.beta0Rad).toBeGreaterThan(Math.PI / 2)
+
+    const trebClamped = computeTrebuchetConfig(
+      {
+        ...GRAVITY_SLING_TREBUCHET,
+        linkage: {
+          ...(GRAVITY_SLING_TREBUCHET.linkage as Extract<
+            typeof GRAVITY_SLING_TREBUCHET.linkage,
+            { kind: 'gravity_trebuchet' }
+          >),
+          cockAngleDeg: 0,
+        },
+      },
+      defaultAdjustments(GRAVITY_SLING_TREBUCHET)
+    )
+    expect(trebClamped.startsInTrough).toBe(false)
+    expect(trebClamped.zBall0M).toBeGreaterThan(trebClamped.troughCenterZM)
   })
 })

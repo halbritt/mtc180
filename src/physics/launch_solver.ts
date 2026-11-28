@@ -358,9 +358,15 @@ function solveCordLinkageLaunch(
 
   const evalTautRhs = (psiVal: number, wVal: number) => {
     const ev = table.evalAtPsi(psiVal)
-    const h1 = ev.inRange ? ev.h1 : table.h1[table.h1.length - 1]
-    const h2 = ev.inRange ? ev.h2 : table.h2[table.h2.length - 1]
-    const thVal = ev.inRange ? ev.thDeg : thRestDeg
+    const lastIdx = table.h1.length - 1
+    const h1 = ev.inRange ? ev.h1 : table.h1[lastIdx]
+    const h2 = ev.inRange ? ev.h2 : table.h2[lastIdx]
+    const thEnd = Math.max(thRestDeg, table.thOfPsiDeg[lastIdx])
+    const thVal = ev.inRange
+      ? ev.thDeg
+      : psiVal < table.psiCockDeg
+        ? table.thCockDeg
+        : Math.max(thRestDeg, thEnd + h1 * (psiVal - table.psiEndDeg))
     const tq = instantaneousSpringTorque(spring, thVal)
     const bailGrav = bailMx * g * Math.cos(thVal * DEG_TO_RAD)
     // Net driving torque on psi before friction
@@ -373,15 +379,320 @@ function solveCordLinkageLaunch(
     const iEff = iArmBall + iBail * h1 * h1
     let acc: number
     let pFric: number
-    if (Math.abs(wVal) < 1e-9 && tauDrive <= fricMag) {
-      acc = 0
+    if (wVal <= 1e-9) {
+      acc = tauDrive > fricMag ? (tauDrive - fricMag) / iEff : 0
       pFric = 0
     } else {
-      const sgn = wVal >= 0 ? 1 : -1
-      acc = (tauDrive - fricMag * sgn) / iEff
-      pFric = fricMag * Math.abs(wVal)
+      acc = (tauDrive - fricMag) / iEff
+      pFric = fricMag * wVal
     }
     return { acc, pFric, h1, h2, thVal, levBMm: ev.levBMm, tq, bailGrav }
+  }
+
+  const rk4TautStep = (psi0: number, w0: number, h: number) => {
+    const r1 = evalTautRhs(psi0, w0)
+    const k1p = Math.max(0, w0) * RAD_TO_DEG
+    const k1w = r1.acc
+    const k1f = r1.pFric
+
+    const p2 = psi0 + 0.5 * h * k1p
+    const w2 = w0 + 0.5 * h * k1w
+    const r2 = evalTautRhs(p2, w2)
+    const k2p = Math.max(0, w2) * RAD_TO_DEG
+    const k2w = r2.acc
+    const k2f = r2.pFric
+
+    const p3 = psi0 + 0.5 * h * k2p
+    const w3 = w0 + 0.5 * h * k2w
+    const r3 = evalTautRhs(p3, w3)
+    const k3p = Math.max(0, w3) * RAD_TO_DEG
+    const k3w = r3.acc
+    const k3f = r3.pFric
+
+    const p4 = psi0 + h * k3p
+    const w4 = w0 + h * k3w
+    const r4 = evalTautRhs(p4, w4)
+    const k4p = Math.max(0, w4) * RAD_TO_DEG
+    const k4w = r4.acc
+    const k4f = r4.pFric
+
+    return {
+      psi1: psi0 + (h / 6) * (k1p + 2 * k2p + 2 * k3p + k4p),
+      w1: w0 + (h / 6) * (k1w + 2 * k2w + 2 * k3w + k4w),
+      dFric: (h / 6) * (k1f + 2 * k2f + 2 * k3f + k4f),
+      acc0: r1.acc,
+    }
+  }
+
+  const evalArmSlackRhs = (pVal: number, wVal: number) => {
+    const gravA = gravArmTorque(pVal)
+    const tauDriveA = -gravA
+    if (wVal <= 1e-9) {
+      return {
+        accA: tauDriveA > tauBearing ? (tauDriveA - tauBearing) / iArmBall : 0,
+        pFricA: 0,
+      }
+    }
+    return {
+      accA: (tauDriveA - tauBearing) / iArmBall,
+      pFricA: tauBearing * wVal,
+    }
+  }
+
+  const evalBailSlackRhs = (tVal: number, wbVal: number) => {
+    const tq =
+      spring.count > 0 && spring.totalEnergyJ > 0
+        ? springTorque(
+            tVal,
+            spring.totalEnergyJ,
+            spring.torqueRatio,
+            spring.springZeroOffsetDeg
+          )
+        : 0
+    const gravB = bailMx * g * Math.cos(tVal * DEG_TO_RAD)
+    const tauBailDrive = -tq - gravB
+    if (wbVal >= -1e-9) {
+      return {
+        accB: tauBailDrive < -tauBearing ? (tauBailDrive + tauBearing) / iBail : 0,
+        pFricB: 0,
+      }
+    }
+    return {
+      accB: (tauBailDrive + tauBearing) / iBail,
+      pFricB: tauBearing * -wbVal,
+    }
+  }
+
+  const rk4ArmSlackStep = (psi0: number, w0: number, h: number) => {
+    const r1 = evalArmSlackRhs(psi0, w0)
+    const k1p = Math.max(0, w0) * RAD_TO_DEG
+    const k1w = r1.accA
+    const k1f = r1.pFricA
+
+    const w2 = w0 + 0.5 * h * k1w
+    const r2 = evalArmSlackRhs(psi0 + 0.5 * h * k1p, w2)
+    const k2p = Math.max(0, w2) * RAD_TO_DEG
+    const k2w = r2.accA
+    const k2f = r2.pFricA
+
+    const w3 = w0 + 0.5 * h * k2w
+    const r3 = evalArmSlackRhs(psi0 + 0.5 * h * k2p, w3)
+    const k3p = Math.max(0, w3) * RAD_TO_DEG
+    const k3w = r3.accA
+    const k3f = r3.pFricA
+
+    const w4 = w0 + h * k3w
+    const r4 = evalArmSlackRhs(psi0 + h * k3p, w4)
+    const k4p = Math.max(0, w4) * RAD_TO_DEG
+    const k4w = r4.accA
+    const k4f = r4.pFricA
+
+    return {
+      psi1: psi0 + (h / 6) * (k1p + 2 * k2p + 2 * k3p + k4p),
+      w1: w0 + (h / 6) * (k1w + 2 * k2w + 2 * k3w + k4w),
+      dFricA: (h / 6) * (k1f + 2 * k2f + 2 * k3f + k4f),
+      acc0: r1.accA,
+    }
+  }
+
+  const rk4BailSlackStep = (th0: number, wb0: number, h: number) => {
+    if (h <= 0 || th0 <= thRestDeg) {
+      return { th1: th0, wb1: wb0, dFricB: 0, acc0: 0 }
+    }
+    const b1 = evalBailSlackRhs(th0, wb0)
+    const b1t = Math.min(0, wb0) * RAD_TO_DEG
+    const b1w = b1.accB
+    const b1f = b1.pFricB
+
+    const wb2 = wb0 + 0.5 * h * b1w
+    const b2 = evalBailSlackRhs(th0 + 0.5 * h * b1t, wb2)
+    const b2t = Math.min(0, wb2) * RAD_TO_DEG
+    const b2w = b2.accB
+    const b2f = b2.pFricB
+
+    const wb3 = wb0 + 0.5 * h * b2w
+    const b3 = evalBailSlackRhs(th0 + 0.5 * h * b2t, wb3)
+    const b3t = Math.min(0, wb3) * RAD_TO_DEG
+    const b3w = b3.accB
+    const b3f = b3.pFricB
+
+    const wb4 = wb0 + h * b3w
+    const b4 = evalBailSlackRhs(th0 + h * b3t, wb4)
+    const b4t = Math.min(0, wb4) * RAD_TO_DEG
+    const b4w = b4.accB
+    const b4f = b4.pFricB
+
+    return {
+      th1: th0 + (h / 6) * (b1t + 2 * b2t + 2 * b3t + b4t),
+      wb1: wb0 + (h / 6) * (b1w + 2 * b2w + 2 * b3w + b4w),
+      dFricB: (h / 6) * (b1f + 2 * b2f + 2 * b3f + b4f),
+      acc0: b1.accB,
+    }
+  }
+
+  const advanceSlackStep = (dtStep: number): 'continue' | 'break' => {
+    const psiS0 = psi
+    const wS0 = w
+    const thS0 = th
+    const wbS0 = wb
+    const tS0 = t
+    const fricS0 = frictionLossJ
+
+    const rA0 = evalArmSlackRhs(psiS0, wS0)
+    const psiRad0 = psiS0 * DEG_TO_RAD
+    const etZ0 = (-oxM * Math.cos(psiRad0) - ozM * Math.sin(psiRad0)) / rBallM
+    if (wS0 > 1.0 && mBall * (rBallM * rA0.accA + g * etZ0) < 0) {
+      leftCradle = true
+      return 'break'
+    }
+
+    const armFull = rk4ArmSlackStep(psiS0, wS0, dtStep)
+    let bailHitAlpha = 2
+    let bailImpactLoss = 0
+    let stepBailFric = 0
+    let thNext = thS0
+    let wbNext = wbS0
+
+    if (thS0 > thRestDeg) {
+      const bailFull = rk4BailSlackStep(thS0, wbS0, dtStep)
+      if (bailFull.th1 > thRestDeg) {
+        if (wbS0 < 0 && bailFull.wb1 >= 0) {
+          const fracStop = Math.max(
+            0,
+            Math.min(
+              1,
+              bailFull.acc0 > 0
+                ? -wbS0 / (bailFull.acc0 * dtStep)
+                : -wbS0 / (bailFull.wb1 - wbS0)
+            )
+          )
+          const bailStop = rk4BailSlackStep(thS0, wbS0, fracStop * dtStep)
+          bailHitAlpha = fracStop
+          thNext = Math.max(thRestDeg, bailStop.th1)
+          wbNext = 0
+          stepBailFric = bailStop.dFricB
+        } else {
+          thNext = bailFull.th1
+          wbNext = Math.min(0, bailFull.wb1)
+          stepBailFric = bailFull.dFricB
+        }
+      } else {
+        const denomTh = thS0 - bailFull.th1
+        let fracHit = denomTh > 1e-12 ? (thS0 - thRestDeg) / denomTh : 1
+        fracHit = Math.max(0, Math.min(1, fracHit))
+        let bailHit = rk4BailSlackStep(thS0, wbS0, fracHit * dtStep)
+        if (Math.abs(bailHit.th1 - thRestDeg) > 1e-7 && Math.abs(bailHit.wb1) > 1e-6) {
+          fracHit = Math.max(
+            0,
+            Math.min(1, fracHit - (bailHit.th1 - thRestDeg) / (bailHit.wb1 * RAD_TO_DEG * dtStep))
+          )
+          bailHit = rk4BailSlackStep(thS0, wbS0, fracHit * dtStep)
+        }
+        bailHitAlpha = fracHit
+        stepBailFric = bailHit.dFricB
+        bailImpactLoss = 0.5 * iBail * bailHit.wb1 * bailHit.wb1
+        thNext = thRestDeg
+        wbNext = 0
+      }
+    }
+
+    // Order psiStopDeg vs w <= 0 crossing cleanly
+    if (armFull.psi1 >= psiStopDeg) {
+      const denom = armFull.psi1 - psiS0
+      let alphaStop = denom > 1e-12 ? (psiStopDeg - psiS0) / denom : 1
+      alphaStop = Math.max(0, Math.min(1, alphaStop))
+      let armStop = rk4ArmSlackStep(psiS0, wS0, alphaStop * dtStep)
+      if (Math.abs(armStop.psi1 - psiStopDeg) > 1e-7 && Math.abs(armStop.w1) > 1e-6) {
+        alphaStop = Math.max(
+          0,
+          Math.min(1, alphaStop - (armStop.psi1 - psiStopDeg) / (armStop.w1 * RAD_TO_DEG * dtStep))
+        )
+        armStop = rk4ArmSlackStep(psiS0, wS0, alphaStop * dtStep)
+      }
+      if (armStop.w1 > 0 || armFull.w1 > 0) {
+        psi = psiStopDeg
+        w = Math.max(0, armStop.w1)
+        t = tS0 + alphaStop * dtStep
+        if (thS0 > thRestDeg && alphaStop < bailHitAlpha) {
+          const bailAtStop = rk4BailSlackStep(thS0, wbS0, alphaStop * dtStep)
+          th = Math.max(thRestDeg, bailAtStop.th1)
+          wb = th <= thRestDeg ? 0 : Math.min(0, bailAtStop.wb1)
+          frictionLossJ = fricS0 + armStop.dFricA + bailAtStop.dFricB
+        } else {
+          th = thNext
+          wb = wbNext
+          frictionLossJ = fricS0 + armStop.dFricA + stepBailFric + bailImpactLoss
+        }
+        leftCradle = true
+        if (t > samples[samples.length - 1].t + 1e-12) {
+          samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: w })
+        }
+        return 'break'
+      }
+    }
+
+    if (armFull.w1 <= 0) {
+      let alpha = 1
+      if (wS0 > 0) {
+        alpha =
+          armFull.acc0 < 0
+            ? Math.min(1, wS0 / (-armFull.acc0 * dtStep))
+            : Math.max(0, Math.min(1, wS0 / (wS0 - armFull.w1)))
+        let armStop = rk4ArmSlackStep(psiS0, wS0, alpha * dtStep)
+        if (armFull.acc0 < 0 && Math.abs(armStop.w1) > 1e-7) {
+          alpha = Math.max(0, Math.min(1, alpha - armStop.w1 / (armFull.acc0 * dtStep)))
+          armStop = rk4ArmSlackStep(psiS0, wS0, alpha * dtStep)
+        }
+        psi = armStop.psi1
+        t = tS0 + alpha * dtStep
+        if (thS0 > thRestDeg && alpha < bailHitAlpha) {
+          const bailAtStop = rk4BailSlackStep(thS0, wbS0, alpha * dtStep)
+          th = Math.max(thRestDeg, bailAtStop.th1)
+          wb = th <= thRestDeg ? 0 : Math.min(0, bailAtStop.wb1)
+          frictionLossJ = fricS0 + armStop.dFricA + bailAtStop.dFricB
+        } else {
+          th = thNext
+          wb = wbNext
+          frictionLossJ = fricS0 + armStop.dFricA + stepBailFric + bailImpactLoss
+        }
+      } else {
+        th = thNext
+        wb = wbNext
+        frictionLossJ = fricS0 + stepBailFric + bailImpactLoss
+      }
+      w = 0
+      if (th <= thRestDeg) wb = 0
+      stalled = true
+      if (t > samples[samples.length - 1].t + 1e-12) {
+        samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: 0 })
+      }
+      return 'break'
+    }
+
+    psi = armFull.psi1
+    w = armFull.w1
+    th = thNext
+    wb = wbNext
+    t = tS0 + dtStep
+    frictionLossJ = fricS0 + armFull.dFricA + stepBailFric + bailImpactLoss
+
+    // Check snap-taut overrun
+    if (psi < table.psiEndDeg && th > thRestDeg) {
+      const evSnap = table.evalAtPsi(psi)
+      if (evSnap.inRange && th < evSnap.thDeg && wb < evSnap.h1 * w) {
+        const h1 = evSnap.h1
+        const denom = iArmBall + iBail * h1 * h1
+        const wNew = (iArmBall * w + iBail * h1 * wb) / denom
+        const relV = wb - h1 * w
+        const snapLoss = 0.5 * ((iArmBall * iBail) / denom) * relV * relV
+        frictionLossJ += snapLoss
+        w = wNew
+        wb = h1 * wNew
+        th = evSnap.thDeg
+        taut = true
+      }
+    }
+    return 'continue'
   }
 
   const maxSteps = Math.ceil(MAX_SIM_TIME_S / dtS) + 2
@@ -390,17 +701,8 @@ function solveCordLinkageLaunch(
 
     const psiPrev = psi
     const wPrev = w
-    const thPrev = th
-    const wbPrev = wb
     const tPrev = t
     const fricPrev = frictionLossJ
-
-    let slackStepArmFric = 0
-    let slackStepBailFric = 0
-    let slackBailHitAlpha = 2
-    let slackBailImpactLoss = 0
-    let usedSlackStep = false
-    let stepBailAtFrac: ((frac: number) => { th1: number; wb1: number; dFricB: number }) | null = null
 
     if (taut && psi < table.psiEndDeg && th > thRestDeg) {
       const r0 = evalTautRhs(psi, w)
@@ -435,274 +737,143 @@ function solveCordLinkageLaunch(
         break
       }
 
-      // RK4 step on (psi, w)
-      const k1p = w * RAD_TO_DEG
-      const k1w = r0.acc
-      const k1f = r0.pFric
+      const stepFull = rk4TautStep(psiPrev, wPrev, dtS)
 
-      const p2 = psi + 0.5 * dtS * k1p
-      const w2 = w + 0.5 * dtS * k1w
-      const r2 = evalTautRhs(p2, w2)
-      const k2p = w2 * RAD_TO_DEG
-      const k2w = r2.acc
-      const k2f = r2.pFric
-
-      const p3 = psi + 0.5 * dtS * k2p
-      const w3 = w + 0.5 * dtS * k2w
-      const r3 = evalTautRhs(p3, w3)
-      const k3p = w3 * RAD_TO_DEG
-      const k3w = r3.acc
-      const k3f = r3.pFric
-
-      const p4 = psi + dtS * k3p
-      const w4 = w + dtS * k3w
-      const r4 = evalTautRhs(p4, w4)
-      const k4p = w4 * RAD_TO_DEG
-      const k4w = r4.acc
-      const k4f = r4.pFric
-
-      psi += (dtS / 6) * (k1p + 2 * k2p + 2 * k3p + k4p)
-      w += (dtS / 6) * (k1w + 2 * k2w + 2 * k3w + k4w)
-      frictionLossJ += (dtS / 6) * (k1f + 2 * k2f + 2 * k3f + k4f)
-      t += dtS
-
-      const evNext = table.evalAtPsi(psi)
-      if (evNext.inRange) {
-        th = evNext.thDeg
-        wb = evNext.h1 * w
-      } else {
-        taut = false
-        if (cordSlackAtDeg === null) cordSlackAtDeg = thPrev
-        const h1End = table.h1[table.h1.length - 1]
-        th = Math.max(thRestDeg, table.thOfPsiDeg[table.thOfPsiDeg.length - 1])
-        wb = h1End * w
-        if (th <= thRestDeg) {
-          th = thRestDeg
-          frictionLossJ += 0.5 * iBail * wb * wb
-          wb = 0
+      // 1) Hard stop reached while still inside taut table range
+      if (psiStopDeg <= table.psiEndDeg && stepFull.psi1 >= psiStopDeg) {
+        const denom = stepFull.psi1 - psiPrev
+        let alphaStop = denom > 1e-12 ? (psiStopDeg - psiPrev) / denom : 1
+        alphaStop = Math.max(0, Math.min(1, alphaStop))
+        let atStop = rk4TautStep(psiPrev, wPrev, alphaStop * dtS)
+        if (Math.abs(atStop.psi1 - psiStopDeg) > 1e-7 && Math.abs(atStop.w1) > 1e-6) {
+          alphaStop = Math.max(
+            0,
+            Math.min(1, alphaStop - (atStop.psi1 - psiStopDeg) / (atStop.w1 * RAD_TO_DEG * dtS))
+          )
+          atStop = rk4TautStep(psiPrev, wPrev, alphaStop * dtS)
+        }
+        if (atStop.w1 > 0 || stepFull.w1 > 0) {
+          psi = psiStopDeg
+          w = Math.max(0, atStop.w1)
+          t = tPrev + alphaStop * dtS
+          frictionLossJ = fricPrev + atStop.dFric
+          const evStop = table.evalAtPsi(psi)
+          const h1Stop = evStop.inRange ? evStop.h1 : table.h1[table.h1.length - 1]
+          th = evStop.inRange
+            ? evStop.thDeg
+            : Math.max(thRestDeg, table.thOfPsiDeg[table.thOfPsiDeg.length - 1])
+          wb = h1Stop * w
+          leftCradle = true
+          if (t > samples[samples.length - 1].t + 1e-12) {
+            samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: w })
+          }
+          if (th > thRestDeg) {
+            const rEnd = evalTautRhs(psi, w)
+            const levBMEnd = Math.max(1e-4, rEnd.levBMm * 1e-3)
+            const tEnd =
+              (rEnd.tq +
+                rEnd.bailGrav +
+                iBail * (rEnd.h1 * rEnd.acc + rEnd.h2 * w * w) -
+                tauBearing) /
+              levBMEnd
+            if (tEnd > peakCordTensionN) peakCordTensionN = tEnd
+          }
+          break
         }
       }
+
+      // 2) Taut-to-slack crossing at psi == table.psiEndDeg: split step cleanly
+      if (stepFull.psi1 > table.psiEndDeg) {
+        const denom = stepFull.psi1 - psiPrev
+        let alphaEnd = denom > 1e-12 ? (table.psiEndDeg - psiPrev) / denom : 1
+        alphaEnd = Math.max(0, Math.min(1, alphaEnd))
+        let atEnd = rk4TautStep(psiPrev, wPrev, alphaEnd * dtS)
+        for (let it = 0; it < 2; it++) {
+          const res = atEnd.psi1 - table.psiEndDeg
+          if (Math.abs(res) <= 1e-8 || Math.abs(atEnd.w1) <= 1e-6) break
+          alphaEnd = Math.max(
+            0,
+            Math.min(1, alphaEnd - res / (atEnd.w1 * RAD_TO_DEG * dtS))
+          )
+          atEnd = rk4TautStep(psiPrev, wPrev, alphaEnd * dtS)
+        }
+        if (atEnd.w1 > 0 || stepFull.w1 > 0) {
+          psi = table.psiEndDeg
+          w = Math.max(0, atEnd.w1)
+          t = tPrev + alphaEnd * dtS
+          frictionLossJ = fricPrev + atEnd.dFric
+          const h1End = table.h1[table.h1.length - 1]
+          th = Math.max(thRestDeg, table.thOfPsiDeg[table.thOfPsiDeg.length - 1])
+          wb = h1End * w
+          taut = false
+          if (cordSlackAtDeg === null) cordSlackAtDeg = th
+          if (th <= thRestDeg) {
+            th = thRestDeg
+            frictionLossJ += 0.5 * iBail * wb * wb
+            wb = 0
+          }
+          if (psi >= psiStopDeg) {
+            leftCradle = true
+            if (t > samples[samples.length - 1].t + 1e-12) {
+              samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: w })
+            }
+            break
+          }
+          const remDt = (1 - alphaEnd) * dtS
+          if (remDt > 1e-12 && advanceSlackStep(remDt) === 'break') {
+            break
+          }
+          samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: w })
+          continue
+        }
+      }
+
+      // 3) Stall (w <= 0) before reaching psiEndDeg or psiStopDeg
+      if (stepFull.w1 <= 0) {
+        if (wPrev > 0) {
+          let alpha =
+            stepFull.acc0 < 0
+              ? Math.min(1, wPrev / (-stepFull.acc0 * dtS))
+              : Math.max(0, Math.min(1, wPrev / (wPrev - stepFull.w1)))
+          let atZero = rk4TautStep(psiPrev, wPrev, alpha * dtS)
+          if (stepFull.acc0 < 0 && Math.abs(atZero.w1) > 1e-7) {
+            alpha = Math.max(0, Math.min(1, alpha - atZero.w1 / (stepFull.acc0 * dtS)))
+            atZero = rk4TautStep(psiPrev, wPrev, alpha * dtS)
+          }
+          psi = Math.min(table.psiEndDeg, atZero.psi1)
+          t = tPrev + alpha * dtS
+          frictionLossJ = fricPrev + atZero.dFric
+          const evZ = table.evalAtPsi(psi)
+          th = evZ.inRange
+            ? evZ.thDeg
+            : Math.max(thRestDeg, table.thOfPsiDeg[table.thOfPsiDeg.length - 1])
+        }
+        w = 0
+        wb = 0
+        stalled = true
+        if (t > samples[samples.length - 1].t + 1e-12) {
+          samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: 0 })
+        }
+        break
+      }
+
+      psi = stepFull.psi1
+      w = stepFull.w1
+      frictionLossJ = fricPrev + stepFull.dFric
+      t = tPrev + dtS
+      const evNext = table.evalAtPsi(psi)
+      th = evNext.inRange
+        ? evNext.thDeg
+        : Math.max(thRestDeg, table.thOfPsiDeg[table.thOfPsiDeg.length - 1])
+      wb = (evNext.inRange ? evNext.h1 : table.h1[table.h1.length - 1]) * w
     } else {
-      usedSlackStep = true
       if (taut) {
         taut = false
         if (cordSlackAtDeg === null) cordSlackAtDeg = th
       }
-      const evalArmSlackRhs = (pVal: number, wVal: number) => {
-        const gravA = gravArmTorque(pVal)
-        const fricA = Math.abs(wVal) > 1e-9 ? tauBearing * (wVal >= 0 ? 1 : -1) : 0
-        const accA = (-gravA - fricA) / iArmBall
-        const pFricA = Math.abs(wVal) > 1e-9 ? tauBearing * Math.abs(wVal) : 0
-        return { accA, pFricA }
-      }
-      const evalBailSlackRhs = (tVal: number, wbVal: number) => {
-        const tq =
-          spring.count > 0 && spring.totalEnergyJ > 0
-            ? springTorque(
-                tVal,
-                spring.totalEnergyJ,
-                spring.torqueRatio,
-                spring.springZeroOffsetDeg
-              )
-            : 0
-        const gravB = bailMx * g * Math.cos(tVal * DEG_TO_RAD)
-        const tauBailDrive = -tq - gravB
-        if (Math.abs(wbVal) < 1e-9 && Math.abs(tauBailDrive) <= tauBearing) {
-          return { accB: 0, pFricB: 0 }
-        }
-        const fricB = tauBearing * (wbVal >= 0 ? 1 : -1)
-        const accB = (tauBailDrive - fricB) / iBail
-        const pFricB = Math.abs(wbVal) > 1e-9 ? tauBearing * Math.abs(wbVal) : 0
-        return { accB, pFricB }
-      }
-
-      const rA1 = evalArmSlackRhs(psi, w)
-      const psiRad0 = psi * DEG_TO_RAD
-      const etZ0 = (-oxM * Math.cos(psiRad0) - ozM * Math.sin(psiRad0)) / rBallM
-      if (w > 1.0 && mBall * (rBallM * rA1.accA + g * etZ0) < 0) {
-        leftCradle = true
+      if (advanceSlackStep(dtS) === 'break') {
         break
       }
-
-      const k1p = w * RAD_TO_DEG
-      const k1w = rA1.accA
-      const k1f = rA1.pFricA
-
-      const rA2 = evalArmSlackRhs(psi + 0.5 * dtS * k1p, w + 0.5 * dtS * k1w)
-      const k2p = (w + 0.5 * dtS * k1w) * RAD_TO_DEG
-      const k2w = rA2.accA
-      const k2f = rA2.pFricA
-
-      const rA3 = evalArmSlackRhs(psi + 0.5 * dtS * k2p, w + 0.5 * dtS * k2w)
-      const k3p = (w + 0.5 * dtS * k2w) * RAD_TO_DEG
-      const k3w = rA3.accA
-      const k3f = rA3.pFricA
-
-      const rA4 = evalArmSlackRhs(psi + dtS * k3p, w + dtS * k3w)
-      const k4p = (w + dtS * k3w) * RAD_TO_DEG
-      const k4w = rA4.accA
-      const k4f = rA4.pFricA
-
-      psi += (dtS / 6) * (k1p + 2 * k2p + 2 * k3p + k4p)
-      w += (dtS / 6) * (k1w + 2 * k2w + 2 * k3w + k4w)
-      slackStepArmFric = (dtS / 6) * (k1f + 2 * k2f + 2 * k3f + k4f)
-
-      stepBailAtFrac = (frac: number) => {
-        const h = frac * dtS
-        if (h <= 0 || thPrev <= thRestDeg) {
-          return { th1: thPrev, wb1: wbPrev, dFricB: 0 }
-        }
-        const b1 = evalBailSlackRhs(thPrev, wbPrev)
-        const b1t = wbPrev * RAD_TO_DEG
-        const b1w = b1.accB
-        const b1f = b1.pFricB
-
-        const th2 = thPrev + 0.5 * h * b1t
-        const wb2 = wbPrev + 0.5 * h * b1w
-        const b2 = evalBailSlackRhs(th2, wb2)
-        const b2t = wb2 * RAD_TO_DEG
-        const b2w = b2.accB
-        const b2f = b2.pFricB
-
-        const th3 = thPrev + 0.5 * h * b2t
-        const wb3 = wbPrev + 0.5 * h * b2w
-        const b3 = evalBailSlackRhs(th3, wb3)
-        const b3t = wb3 * RAD_TO_DEG
-        const b3w = b3.accB
-        const b3f = b3.pFricB
-
-        const th4 = thPrev + h * b3t
-        const wb4 = wbPrev + h * b3w
-        const b4 = evalBailSlackRhs(th4, wb4)
-        const b4t = wb4 * RAD_TO_DEG
-        const b4w = b4.accB
-        const b4f = b4.pFricB
-
-        return {
-          th1: thPrev + (h / 6) * (b1t + 2 * b2t + 2 * b3t + b4t),
-          wb1: wbPrev + (h / 6) * (b1w + 2 * b2w + 2 * b3w + b4w),
-          dFricB: (h / 6) * (b1f + 2 * b2f + 2 * b3f + b4f),
-        }
-      }
-
-      if (thPrev > thRestDeg) {
-        const bailFull = stepBailAtFrac(1)
-        if (bailFull.th1 > thRestDeg) {
-          th = bailFull.th1
-          wb = bailFull.wb1
-          slackStepBailFric = bailFull.dFricB
-        } else {
-          const denomTh = thPrev - bailFull.th1
-          let fracHit = denomTh > 1e-12 ? (thPrev - thRestDeg) / denomTh : 1
-          fracHit = Math.max(0, Math.min(1, fracHit))
-          let bailHit = stepBailAtFrac(fracHit)
-          if (Math.abs(bailHit.th1 - thRestDeg) > 1e-7 && Math.abs(bailHit.wb1) > 1e-6) {
-            fracHit = Math.max(
-              0,
-              Math.min(1, fracHit - (bailHit.th1 - thRestDeg) / (bailHit.wb1 * RAD_TO_DEG * dtS))
-            )
-            bailHit = stepBailAtFrac(fracHit)
-          }
-          slackBailHitAlpha = fracHit
-          slackStepBailFric = bailHit.dFricB
-          slackBailImpactLoss = 0.5 * iBail * bailHit.wb1 * bailHit.wb1
-          th = thRestDeg
-          wb = 0
-        }
-      }
-
-      frictionLossJ = fricPrev + slackStepArmFric + slackStepBailFric + slackBailImpactLoss
-      t += dtS
-
-      // Check snap-taut overrun
-      if (psi < table.psiEndDeg && th > thRestDeg) {
-        const evSnap = table.evalAtPsi(psi)
-        if (evSnap.inRange && th < evSnap.thDeg && wb < evSnap.h1 * w) {
-          const h1 = evSnap.h1
-          const denom = iArmBall + iBail * h1 * h1
-          const wNew = (iArmBall * w + iBail * h1 * wb) / denom
-          const relV = wb - h1 * w
-          const snapLoss = 0.5 * ((iArmBall * iBail) / denom) * relV * relV
-          frictionLossJ += snapLoss
-          w = wNew
-          wb = h1 * wNew
-          th = evSnap.thDeg
-          taut = true
-        }
-      }
-    }
-
-    // Clamp negative arm rate (stall) cleanly without negative-velocity oscillation
-    if (w <= 0) {
-      const alpha = wPrev > 0 && w < 0 ? wPrev / (wPrev - w) : 1
-      if (wPrev > 0 && w < 0) {
-        psi = psiPrev + alpha * (psi - psiPrev)
-        t = tPrev + alpha * (t - tPrev)
-        if (usedSlackStep) {
-          if (stepBailAtFrac && thPrev > thRestDeg && alpha < slackBailHitAlpha) {
-            const bailAtStop = stepBailAtFrac(alpha)
-            th = bailAtStop.th1
-            wb = bailAtStop.wb1
-            frictionLossJ = fricPrev + alpha * slackStepArmFric + bailAtStop.dFricB
-          } else {
-            frictionLossJ =
-              fricPrev + alpha * slackStepArmFric + slackStepBailFric + slackBailImpactLoss
-          }
-        } else {
-          th = thPrev + alpha * (th - thPrev)
-          wb = th <= thRestDeg ? 0 : wbPrev + alpha * (wb - wbPrev)
-          frictionLossJ = fricPrev + alpha * (frictionLossJ - fricPrev)
-        }
-      }
-      w = 0
-      if (!usedSlackStep || th <= thRestDeg) {
-        wb = 0
-      }
-      stalled = true
-      if (t > samples[samples.length - 1].t + 1e-12) {
-        samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: 0 })
-      }
-      break
-    }
-
-    // Interpolate exact crossing of psiStopDeg
-    if (psi >= psiStopDeg) {
-      const denom = psi - psiPrev
-      const alpha = denom > 1e-12 ? (psiStopDeg - psiPrev) / denom : 1
-      psi = psiStopDeg
-      w = wPrev + alpha * (w - wPrev)
-      t = tPrev + alpha * (t - tPrev)
-      if (usedSlackStep) {
-        if (stepBailAtFrac && thPrev > thRestDeg && alpha < slackBailHitAlpha) {
-          const bailAtStop = stepBailAtFrac(alpha)
-          th = bailAtStop.th1
-          wb = bailAtStop.wb1
-          frictionLossJ = fricPrev + alpha * slackStepArmFric + bailAtStop.dFricB
-        } else {
-          frictionLossJ =
-            fricPrev + alpha * slackStepArmFric + slackStepBailFric + slackBailImpactLoss
-        }
-      } else {
-        th = thPrev + alpha * (th - thPrev)
-        wb = wbPrev + alpha * (wb - wbPrev)
-        frictionLossJ = fricPrev + alpha * (frictionLossJ - fricPrev)
-      }
-      leftCradle = true
-      if (t > samples[samples.length - 1].t + 1e-12) {
-        samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: w })
-      }
-      if (taut && psi <= table.psiEndDeg && th > thRestDeg) {
-        const rEnd = evalTautRhs(psi, w)
-        const levBM = Math.max(1e-4, rEnd.levBMm * 1e-3)
-        const tEnd =
-          (rEnd.tq +
-            rEnd.bailGrav +
-            iBail * (rEnd.h1 * rEnd.acc + rEnd.h2 * w * w) -
-            tauBearing * (w >= 0 ? 1 : -1)) /
-          levBM
-        if (tEnd > peakCordTensionN) peakCordTensionN = tEnd
-      }
-      break
     }
 
     samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: w })
@@ -843,21 +1014,90 @@ function solveDirectRailLaunch(
       mBall * g * (x * Math.cos(th) + yy * Math.sin(th)) +
       cfg.mxBaseKgM * g * Math.cos(th)
     const tauDrive = tq + gravPhi - mBall * as_ * sdVal * pdVal
-    const fric = Math.abs(pdVal) < 1e-9 && tauDrive <= tauBearing ? tauDrive : tauBearing * (pdVal >= 0 ? 1 : -1)
-    const qp = tauDrive - fric
     const qs = -mBall * g * (cg * Math.sin(th) + sg * Math.cos(th))
-    const rhs1 = qp
     const rhs2 = qs + 0.5 * mBall * as_ * pdVal * pdVal
     const det = m11 * ms - c * c
-    const accPhiFree = (ms * rhs1 - c * rhs2) / det
-    const accSFree = (-c * rhs1 + m11 * rhs2) / det
-    const pFric = Math.abs(pdVal) > 1e-9 ? tauBearing * Math.abs(pdVal) : 0
+    const lockedS = sVal <= 1e-9 && sdVal <= 0
 
-    if (sVal <= 1e-9 && sdVal <= 0 && accSFree <= 0) {
-      const accPhiLocked = qp / m11
-      return { dphi: pdVal, ds: 0, dpd: accPhiLocked, dsd: 0, pFric }
+    if (pdVal <= 1e-9) {
+      const pFric = 0
+      const qpDrive = tauDrive - tauBearing
+      if (lockedS) {
+        const accSCheck = (-c * Math.max(0, qpDrive) + m11 * rhs2) / det
+        if (accSCheck <= 0) {
+          return {
+            dphi: 0,
+            ds: 0,
+            dpd: qpDrive > 0 ? qpDrive / m11 : 0,
+            dsd: 0,
+            pFric,
+          }
+        }
+      }
+      const tauHold = tauDrive - (c / ms) * rhs2
+      if (tauHold <= tauBearing) {
+        const dsd = lockedS && rhs2 <= 0 ? 0 : rhs2 / ms
+        return {
+          dphi: 0,
+          ds: lockedS && dsd <= 0 ? 0 : sdVal,
+          dpd: 0,
+          dsd,
+          pFric,
+        }
+      }
+      const accPhiFree = (ms * qpDrive - c * rhs2) / det
+      const accSFree = (-c * qpDrive + m11 * rhs2) / det
+      if (lockedS && accSFree <= 0) {
+        return { dphi: 0, ds: 0, dpd: qpDrive / m11, dsd: 0, pFric }
+      }
+      return { dphi: 0, ds: sdVal, dpd: accPhiFree, dsd: accSFree, pFric }
+    }
+
+    const qp = tauDrive - tauBearing
+    const accPhiFree = (ms * qp - c * rhs2) / det
+    const accSFree = (-c * qp + m11 * rhs2) / det
+    const pFric = tauBearing * pdVal
+
+    if (lockedS && accSFree <= 0) {
+      return { dphi: pdVal, ds: 0, dpd: qp / m11, dsd: 0, pFric }
     }
     return { dphi: pdVal, ds: sdVal, dpd: accPhiFree, dsd: accSFree, pFric }
+  }
+
+  const rk4RailStep = (
+    p0: number,
+    s0: number,
+    pd0: number,
+    sd0: number,
+    h: number
+  ) => {
+    const k1 = evalRhs(p0, s0, pd0, sd0)
+    const k2 = evalRhs(
+      p0 + 0.5 * h * k1.dphi,
+      Math.max(0, s0 + 0.5 * h * k1.ds),
+      pd0 + 0.5 * h * k1.dpd,
+      sd0 + 0.5 * h * k1.dsd
+    )
+    const k3 = evalRhs(
+      p0 + 0.5 * h * k2.dphi,
+      Math.max(0, s0 + 0.5 * h * k2.ds),
+      pd0 + 0.5 * h * k2.dpd,
+      sd0 + 0.5 * h * k2.dsd
+    )
+    const k4 = evalRhs(
+      p0 + h * k3.dphi,
+      Math.max(0, s0 + h * k3.ds),
+      pd0 + h * k3.dpd,
+      sd0 + h * k3.dsd
+    )
+    return {
+      phi1: p0 + (h / 6) * (k1.dphi + 2 * k2.dphi + 2 * k3.dphi + k4.dphi),
+      s1: s0 + (h / 6) * (k1.ds + 2 * k2.ds + 2 * k3.ds + k4.ds),
+      pd1: pd0 + (h / 6) * (k1.dpd + 2 * k2.dpd + 2 * k3.dpd + k4.dpd),
+      sd1: sd0 + (h / 6) * (k1.dsd + 2 * k2.dsd + 2 * k3.dsd + k4.dsd),
+      dFric: (h / 6) * (k1.pFric + 2 * k2.pFric + 2 * k3.pFric + k4.pFric),
+      k1,
+    }
   }
 
   const maxSteps = Math.ceil(MAX_SIM_TIME_S / dtS) + 2
@@ -879,38 +1119,22 @@ function solveDirectRailLaunch(
     const tPrev = t
     const fricPrev = frictionLossJ
 
-    const k1 = evalRhs(phi, s, phid, sd)
-    if (phid === 0 && k1.dpd <= 0) {
+    const stepFull = rk4RailStep(phiPrev, sPrev, pdPrev, sdPrev, dtS)
+    if (phid === 0 && stepFull.k1.dpd <= 0) {
       break
     }
-    const k2 = evalRhs(
-      phi + 0.5 * dtS * k1.dphi,
-      Math.max(0, s + 0.5 * dtS * k1.ds),
-      phid + 0.5 * dtS * k1.dpd,
-      sd + 0.5 * dtS * k1.dsd
-    )
-    const k3 = evalRhs(
-      phi + 0.5 * dtS * k2.dphi,
-      Math.max(0, s + 0.5 * dtS * k2.ds),
-      phid + 0.5 * dtS * k2.dpd,
-      sd + 0.5 * dtS * k2.dsd
-    )
-    const k4 = evalRhs(
-      phi + dtS * k3.dphi,
-      Math.max(0, s + dtS * k3.ds),
-      phid + dtS * k3.dpd,
-      sd + dtS * k3.dsd
-    )
 
-    phi += (dtS / 6) * (k1.dphi + 2 * k2.dphi + 2 * k3.dphi + k4.dphi)
-    s += (dtS / 6) * (k1.ds + 2 * k2.ds + 2 * k3.ds + k4.ds)
-    phid += (dtS / 6) * (k1.dpd + 2 * k2.dpd + 2 * k3.dpd + k4.dpd)
-    sd += (dtS / 6) * (k1.dsd + 2 * k2.dsd + 2 * k3.dsd + k4.dsd)
-    frictionLossJ += (dtS / 6) * (k1.pFric + 2 * k2.pFric + 2 * k3.pFric + k4.pFric)
-    t += dtS
+    phi = stepFull.phi1
+    s = stepFull.s1
+    phid = stepFull.pd1
+    sd = stepFull.sd1
+    frictionLossJ = fricPrev + stepFull.dFric
+    t = tPrev + dtS
 
+    let hitBackstop = false
     if (s <= 0) {
       if (sd < 0) {
+        hitBackstop = true
         const x = cfg.x0M
         const yy = cfg.y0M
         const a_ = x * x + yy * yy
@@ -927,12 +1151,26 @@ function solveDirectRailLaunch(
 
     if (phid <= 0) {
       if (pdPrev > 0 && phid < 0) {
-        const a = pdPrev / (pdPrev - phid)
-        phi = phiPrev + a * (phi - phiPrev)
-        s = Math.max(0, sPrev + a * (s - sPrev))
-        sd = s <= 1e-9 ? Math.max(0, sdPrev + a * (sd - sdPrev)) : sdPrev + a * (sd - sdPrev)
-        t = tPrev + a * (t - tPrev)
-        frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
+        if (!hitBackstop && stepFull.k1.dpd < 0) {
+          let a = Math.max(0, Math.min(1, pdPrev / (-stepFull.k1.dpd * dtS)))
+          let atZ = rk4RailStep(phiPrev, sPrev, pdPrev, sdPrev, a * dtS)
+          if (Math.abs(atZ.pd1) > 1e-7) {
+            a = Math.max(0, Math.min(1, a - atZ.pd1 / (stepFull.k1.dpd * dtS)))
+            atZ = rk4RailStep(phiPrev, sPrev, pdPrev, sdPrev, a * dtS)
+          }
+          phi = atZ.phi1
+          s = Math.max(0, atZ.s1)
+          sd = s <= 1e-9 ? Math.max(0, atZ.sd1) : atZ.sd1
+          t = tPrev + a * dtS
+          frictionLossJ = fricPrev + atZ.dFric
+        } else {
+          const a = pdPrev / (pdPrev - phid)
+          phi = phiPrev + a * (phi - phiPrev)
+          s = Math.max(0, sPrev + a * (s - sPrev))
+          sd = s <= 1e-9 ? Math.max(0, sdPrev + a * (sd - sdPrev)) : sdPrev + a * (sd - sdPrev)
+          t = tPrev + a * (t - tPrev)
+          frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
+        }
       }
       phid = 0
       if (s <= 1e-9 && sd < 0) {
@@ -1155,17 +1393,48 @@ function solveCoaxialCupOrTiltedLaunch(
   const evalRhs = (thVal: number, wVal: number) => {
     const tq = instantaneousSpringTorque(spring, thVal)
     const tauDrive = tq - gravTorque(thVal)
-    let acc: number
-    let pFric: number
-    if (Math.abs(wVal) < 1e-9 && tauDrive <= tauBearing) {
-      acc = 0
-      pFric = 0
-    } else {
-      const sgn = wVal >= 0 ? 1 : -1
-      acc = (tauDrive - tauBearing * sgn) / iTotal
-      pFric = tauBearing * Math.abs(wVal)
+    if (wVal <= 1e-9) {
+      return {
+        acc: tauDrive > tauBearing ? (tauDrive - tauBearing) / iTotal : 0,
+        pFric: 0,
+      }
     }
-    return { acc, pFric }
+    return {
+      acc: (tauDrive - tauBearing) / iTotal,
+      pFric: tauBearing * wVal,
+    }
+  }
+
+  const rk4CupStep = (th0: number, w0: number, h: number) => {
+    const r1 = evalRhs(th0, w0)
+    const k1t = -Math.max(0, w0) * RAD_TO_DEG
+    const k1w = r1.acc
+    const k1f = r1.pFric
+
+    const w2 = w0 + 0.5 * h * k1w
+    const r2 = evalRhs(th0 + 0.5 * h * k1t, w2)
+    const k2t = -Math.max(0, w2) * RAD_TO_DEG
+    const k2w = r2.acc
+    const k2f = r2.pFric
+
+    const w3 = w0 + 0.5 * h * k2w
+    const r3 = evalRhs(th0 + 0.5 * h * k2t, w3)
+    const k3t = -Math.max(0, w3) * RAD_TO_DEG
+    const k3w = r3.acc
+    const k3f = r3.pFric
+
+    const w4 = w0 + h * k3w
+    const r4 = evalRhs(th0 + h * k3t, w4)
+    const k4t = -Math.max(0, w4) * RAD_TO_DEG
+    const k4w = r4.acc
+    const k4f = r4.pFric
+
+    return {
+      th1: th0 + (h / 6) * (k1t + 2 * k2t + 2 * k3t + k4t),
+      w1: w0 + (h / 6) * (k1w + 2 * k2w + 2 * k3w + k4w),
+      dFric: (h / 6) * (k1f + 2 * k2f + 2 * k3f + k4f),
+      acc0: r1.acc,
+    }
   }
 
   const maxSteps = Math.ceil(MAX_SIM_TIME_S / dtS) + 2
@@ -1192,36 +1461,48 @@ function solveCoaxialCupOrTiltedLaunch(
     const tPrev = t
     const fricPrev = frictionLossJ
 
-    const k1t = -w * RAD_TO_DEG
-    const k1w = r0.acc
-    const k1f = r0.pFric
+    const stepFull = rk4CupStep(thPrev, wPrev, dtS)
+    th = stepFull.th1
+    w = stepFull.w1
+    frictionLossJ = fricPrev + stepFull.dFric
+    t = tPrev + dtS
 
-    const r2 = evalRhs(th + 0.5 * dtS * k1t, w + 0.5 * dtS * k1w)
-    const k2t = -(w + 0.5 * dtS * k1w) * RAD_TO_DEG
-    const k2w = r2.acc
-    const k2f = r2.pFric
-
-    const r3 = evalRhs(th + 0.5 * dtS * k2t, w + 0.5 * dtS * k2w)
-    const k3t = -(w + 0.5 * dtS * k2w) * RAD_TO_DEG
-    const k3w = r3.acc
-    const k3f = r3.pFric
-
-    const r4 = evalRhs(th + dtS * k3t, w + dtS * k3w)
-    const k4t = -(w + dtS * k3w) * RAD_TO_DEG
-    const k4w = r4.acc
-    const k4f = r4.pFric
-
-    th += (dtS / 6) * (k1t + 2 * k2t + 2 * k3t + k4t)
-    w += (dtS / 6) * (k1w + 2 * k2w + 2 * k3w + k4w)
-    frictionLossJ += (dtS / 6) * (k1f + 2 * k2f + 2 * k3f + k4f)
-    t += dtS
+    if (th <= thStopDeg) {
+      const denom = thPrev - th
+      const a = denom > 1e-12 ? Math.max(0, Math.min(1, (thPrev - thStopDeg) / denom)) : 1
+      const atStop = rk4CupStep(thPrev, wPrev, a * dtS)
+      if (atStop.w1 > 0 || w > 0) {
+        th = thStopDeg
+        w = Math.max(0, atStop.w1)
+        t = tPrev + a * dtS
+        frictionLossJ = fricPrev + atStop.dFric
+        leftCradle = true
+        if (t > samples[samples.length - 1].t + 1e-12) {
+          samples.push({
+            t,
+            psiDeg: isTilted ? tiltedCfg!.alphaTrapFrontDeg + th : 90 - th,
+            thDeg: th,
+            omegaArm: w,
+          })
+        }
+        break
+      }
+    }
 
     if (w <= 0) {
-      if (wPrev > 0 && w < 0) {
-        const a = wPrev / (wPrev - w)
-        th = thPrev + a * (th - thPrev)
-        t = tPrev + a * (t - tPrev)
-        frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
+      if (wPrev > 0) {
+        let a =
+          stepFull.acc0 < 0
+            ? Math.min(1, wPrev / (-stepFull.acc0 * dtS))
+            : Math.max(0, Math.min(1, wPrev / (wPrev - w)))
+        let atZero = rk4CupStep(thPrev, wPrev, a * dtS)
+        if (stepFull.acc0 < 0 && Math.abs(atZero.w1) > 1e-7) {
+          a = Math.max(0, Math.min(1, a - atZero.w1 / (stepFull.acc0 * dtS)))
+          atZero = rk4CupStep(thPrev, wPrev, a * dtS)
+        }
+        th = atZero.th1
+        t = tPrev + a * dtS
+        frictionLossJ = fricPrev + atZero.dFric
       }
       w = 0
       leftCradle = false
@@ -1231,25 +1512,6 @@ function solveCoaxialCupOrTiltedLaunch(
           psiDeg: isTilted ? tiltedCfg!.alphaTrapFrontDeg + th : 90 - th,
           thDeg: th,
           omegaArm: 0,
-        })
-      }
-      break
-    }
-
-    if (th <= thStopDeg) {
-      const denom = thPrev - th
-      const a = denom > 1e-12 ? (thPrev - thStopDeg) / denom : 1
-      th = thStopDeg
-      w = wPrev + a * (w - wPrev)
-      t = tPrev + a * (t - tPrev)
-      frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
-      leftCradle = true
-      if (t > samples[samples.length - 1].t + 1e-12) {
-        samples.push({
-          t,
-          psiDeg: isTilted ? tiltedCfg!.alphaTrapFrontDeg + th : 90 - th,
-          thDeg: th,
-          omegaArm: w,
         })
       }
       break
@@ -1419,16 +1681,59 @@ function solveInclinedRampLaunch(
     const fricTot = tauBearing + fChuteFric * k
     let acc: number
     let pFric: number
-    if (Math.abs(wbVal) < 1e-9 && tauDrive <= fricTot) {
-      acc = 0
+    if (wbVal <= 1e-9) {
+      acc = tauDrive > fricTot ? (tauDrive - fricTot) / iEff : 0
       pFric = 0
     } else {
-      const sgn = wbVal >= 0 ? 1 : -1
-      acc = (tauDrive - fricTot * sgn) / iEff
-      pFric = fricTot * Math.abs(wbVal)
+      acc = (tauDrive - fricTot) / iEff
+      pFric = fricTot * wbVal
     }
-    const tension = mTot * (k * acc + dk * wbVal * wbVal) + fChuteGrav + fChuteFric * (wbVal >= 0 ? 1 : -1)
+    const tension =
+      mTot * (k * acc + dk * wbVal * wbVal) +
+      fChuteGrav +
+      (wbVal > 1e-9 ? fChuteFric : 0)
     return { acc, pFric, k, tension }
+  }
+
+  const rk4RampTautStep = (th0: number, wb0: number, s0: number, h: number) => {
+    const r1 = evalTautRhs(th0, wb0)
+    const w1Pos = Math.max(0, wb0)
+    const k1t = -w1Pos * RAD_TO_DEG
+    const k1w = r1.acc
+    const k1s = r1.k * w1Pos
+    const k1f = r1.pFric
+
+    const w2 = wb0 + 0.5 * h * k1w
+    const r2 = evalTautRhs(th0 + 0.5 * h * k1t, w2)
+    const w2Pos = Math.max(0, w2)
+    const k2t = -w2Pos * RAD_TO_DEG
+    const k2w = r2.acc
+    const k2s = r2.k * w2Pos
+    const k2f = r2.pFric
+
+    const w3 = wb0 + 0.5 * h * k2w
+    const r3 = evalTautRhs(th0 + 0.5 * h * k2t, w3)
+    const w3Pos = Math.max(0, w3)
+    const k3t = -w3Pos * RAD_TO_DEG
+    const k3w = r3.acc
+    const k3s = r3.k * w3Pos
+    const k3f = r3.pFric
+
+    const w4 = wb0 + h * k3w
+    const r4 = evalTautRhs(th0 + h * k3t, w4)
+    const w4Pos = Math.max(0, w4)
+    const k4t = -w4Pos * RAD_TO_DEG
+    const k4w = r4.acc
+    const k4s = r4.k * w4Pos
+    const k4f = r4.pFric
+
+    return {
+      th1: th0 + (h / 6) * (k1t + 2 * k2t + 2 * k3t + k4t),
+      wb1: wb0 + (h / 6) * (k1w + 2 * k2w + 2 * k3w + k4w),
+      s1: s0 + (h / 6) * (k1s + 2 * k2s + 2 * k3s + k4s),
+      dFric: (h / 6) * (k1f + 2 * k2f + 2 * k3f + k4f),
+      acc0: r1.acc,
+    }
   }
 
   const maxSteps = Math.ceil(MAX_SIM_TIME_S / dtS) + 2
@@ -1461,50 +1766,18 @@ function solveInclinedRampLaunch(
         continue
       }
 
-      const k1t = -wb * RAD_TO_DEG
-      const k1w = r0.acc
-      const k1s = r0.k * wb
-      const k1f = r0.pFric
-
-      const r2 = evalTautRhs(th + 0.5 * dtS * k1t, wb + 0.5 * dtS * k1w)
-      const w2 = wb + 0.5 * dtS * k1w
-      const k2t = -w2 * RAD_TO_DEG
-      const k2w = r2.acc
-      const k2s = r2.k * w2
-      const k2f = r2.pFric
-
-      const r3 = evalTautRhs(th + 0.5 * dtS * k2t, wb + 0.5 * dtS * k2w)
-      const w3 = wb + 0.5 * dtS * k2w
-      const k3t = -w3 * RAD_TO_DEG
-      const k3w = r3.acc
-      const k3s = r3.k * w3
-      const k3f = r3.pFric
-
-      const r4 = evalTautRhs(th + dtS * k3t, wb + dtS * k3w)
-      const w4 = wb + dtS * k3w
-      const k4t = -w4 * RAD_TO_DEG
-      const k4w = r4.acc
-      const k4s = r4.k * w4
-      const k4f = r4.pFric
-
-      th += (dtS / 6) * (k1t + 2 * k2t + 2 * k3t + k4t)
-      wb += (dtS / 6) * (k1w + 2 * k2w + 2 * k3w + k4w)
-      s += (dtS / 6) * (k1s + 2 * k2s + 2 * k3s + k4s)
-      frictionLossJ += (dtS / 6) * (k1f + 2 * k2f + 2 * k3f + k4f)
-      t += dtS
+      const stepFull = rk4RampTautStep(thPrev, wbPrev, sPrev, dtS)
+      th = stepFull.th1
+      wb = stepFull.wb1
+      s = stepFull.s1
+      frictionLossJ = fricPrev + stepFull.dFric
+      t = tPrev + dtS
 
       const kEnd = bailLevM(th)
       vBall = kEnd * wb
       sSled = s
 
-      if (wb <= 0) {
-        wb = 0
-        vBall = 0
-        leftCradle = false
-        break
-      }
-
-      if (s >= rampLengthM) {
+      if (s >= rampLengthM && wb > 0) {
         const denom = s - sPrev
         const a = denom > 1e-12 ? (rampLengthM - sPrev) / denom : 1
         s = rampLengthM
@@ -1518,6 +1791,32 @@ function solveInclinedRampLaunch(
         leftCradle = true
         if (t > samples[samples.length - 1].t + 1e-12) {
           samples.push({ t, psiDeg: cfg.rampAngleDeg, thDeg: th, omegaArm: wb })
+        }
+        break
+      }
+
+      if (wb <= 0) {
+        if (wbPrev > 0) {
+          let a =
+            stepFull.acc0 < 0
+              ? Math.min(1, wbPrev / (-stepFull.acc0 * dtS))
+              : Math.max(0, Math.min(1, wbPrev / (wbPrev - wb)))
+          let atZero = rk4RampTautStep(thPrev, wbPrev, sPrev, a * dtS)
+          if (stepFull.acc0 < 0 && Math.abs(atZero.wb1) > 1e-7) {
+            a = Math.max(0, Math.min(1, a - atZero.wb1 / (stepFull.acc0 * dtS)))
+            atZero = rk4RampTautStep(thPrev, wbPrev, sPrev, a * dtS)
+          }
+          th = atZero.th1
+          s = atZero.s1
+          sSled = s
+          t = tPrev + a * dtS
+          frictionLossJ = fricPrev + atZero.dFric
+        }
+        wb = 0
+        vBall = 0
+        leftCradle = false
+        if (t > samples[samples.length - 1].t + 1e-12) {
+          samples.push({ t, psiDeg: cfg.rampAngleDeg, thDeg: th, omegaArm: 0 })
         }
         break
       }
@@ -1540,34 +1839,31 @@ function solveInclinedRampLaunch(
     } else {
       // Ball coasting up ramp after sled stopped
       const decel = g * (sinB + cfg.muChute * cosB)
-      const pFricCoast = (vVal: number) => mBall * g * cfg.muChute * cosB * Math.max(0, vVal)
+      const sNext = sPrev + vPrev * dtS - 0.5 * decel * dtS * dtS
+      const vNext = vPrev - decel * dtS
 
-      const k1s = vBall
-      const k1v = -decel
-      const k1f = pFricCoast(vBall)
-      const k2s = vBall + 0.5 * dtS * k1v
-      const k2v = -decel
-      const k2f = pFricCoast(k2s)
-      const k3s = vBall + 0.5 * dtS * k2v
-      const k3v = -decel
-      const k3f = pFricCoast(k3s)
-      const k4s = vBall + dtS * k3v
-      const k4v = -decel
-      const k4f = pFricCoast(k4s)
-
-      s += (dtS / 6) * (k1s + 2 * k2s + 2 * k3s + k4s)
-      vBall += (dtS / 6) * (k1v + 2 * k2v + 2 * k3v + k4v)
-      frictionLossJ += (dtS / 6) * (k1f + 2 * k2f + 2 * k3f + k4f)
-      t += dtS
-
-      if (vBall <= 0) {
-        if (vPrev > 0) {
-          const a = vPrev / (vPrev - vBall)
-          s = sPrev + a * (s - sPrev)
-          t = tPrev + a * (t - tPrev)
-          frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
+      if (sNext >= rampLengthM) {
+        const disc = Math.max(0, vPrev * vPrev - 2 * decel * (rampLengthM - sPrev))
+        const vExit = Math.sqrt(disc)
+        const tHit = decel > 1e-12 ? (vPrev - vExit) / decel : (rampLengthM - sPrev) / Math.max(1e-12, vPrev)
+        s = rampLengthM
+        vBall = vExit
+        t = tPrev + Math.max(0, Math.min(dtS, tHit))
+        frictionLossJ = fricPrev + mBall * g * cfg.muChute * cosB * (rampLengthM - sPrev)
+        leftCradle = true
+        if (t > samples[samples.length - 1].t + 1e-12) {
+          samples.push({ t, psiDeg: cfg.rampAngleDeg, thDeg: th, omegaArm: 0 })
         }
+        break
+      }
+
+      if (vNext <= 0) {
+        const tStop = decel > 1e-12 ? Math.max(0, Math.min(dtS, vPrev / decel)) : 0
+        const dsStop = 0.5 * vPrev * tStop
+        s = sPrev + dsStop
         vBall = 0
+        t = tPrev + tStop
+        frictionLossJ = fricPrev + mBall * g * cfg.muChute * cosB * dsStop
         leftCradle = false
         if (t > samples[samples.length - 1].t + 1e-12) {
           samples.push({ t, psiDeg: cfg.rampAngleDeg, thDeg: th, omegaArm: 0 })
@@ -1575,19 +1871,10 @@ function solveInclinedRampLaunch(
         break
       }
 
-      if (s >= rampLengthM) {
-        const denom = s - sPrev
-        const a = denom > 1e-12 ? (rampLengthM - sPrev) / denom : 1
-        s = rampLengthM
-        vBall = vPrev + a * (vBall - vPrev)
-        t = tPrev + a * (t - tPrev)
-        frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
-        leftCradle = true
-        if (t > samples[samples.length - 1].t + 1e-12) {
-          samples.push({ t, psiDeg: cfg.rampAngleDeg, thDeg: th, omegaArm: 0 })
-        }
-        break
-      }
+      s = sNext
+      vBall = vNext
+      frictionLossJ = fricPrev + mBall * g * cfg.muChute * cosB * (s - sPrev)
+      t = tPrev + dtS
 
       samples.push({ t, psiDeg: cfg.rampAngleDeg, thDeg: th, omegaArm: 0 })
     }
@@ -1683,15 +1970,24 @@ function solveTrebuchetLaunch(
 
   let th = cfg.th0Rad
   let thd = 0
-  let beta = cfg.beta0Rad
+  const sinB0Raw =
+    (cfg.pivotHeightM + la * Math.sin(cfg.th0Rad) - cfg.troughCenterZM) / ls
+  let beta =
+    seatingJitterM === 0
+      ? cfg.beta0Rad
+      : Math.PI - Math.asin(Math.max(-0.99, Math.min(0.99, sinB0Raw)))
   let betad = 0
   let t = 0
-  let inTrough = true
+  let inTrough = cfg.startsInTrough && sinB0Raw >= -0.99 && sinB0Raw <= 0.99
   let frictionLossJ = 0
   let leftCradle = false
 
   const zArm0 = cfg.pivotHeightM + cgArm * Math.sin(cfg.th0Rad)
-  const peBallArm0 = mEff * g * cfg.troughCenterZM + mArm * g * zArm0
+  const zBall0M =
+    seatingJitterM === 0 && cfg.startsInTrough
+      ? cfg.zBall0M
+      : cfg.pivotHeightM + la * Math.sin(cfg.th0Rad) - ls * Math.sin(beta)
+  const peBallArm0 = mEff * g * zBall0M + mArm * g * zArm0
 
   const samples: ArmTraceSample[] = [
     {
@@ -1707,7 +2003,8 @@ function solveTrebuchetLaunch(
     thdV: number,
     bV: number,
     bdV: number,
-    constrained: boolean
+    constrained: boolean,
+    thdDir = 0
   ) => {
     const cwActive = thV < Math.PI * 0.5
     const kc = cwActive ? cfg.kCwM * Math.cos(thV) : 0
@@ -1740,15 +2037,21 @@ function solveTrebuchetLaunch(
     let tauHold = 0
     let tauFric: number
     let pFric: number
-    if (Math.abs(thdV) < 1e-9) {
+    const crossedZero =
+      Math.abs(thdV) < 1e-9 ||
+      (thdDir > 0 && thdV <= 1e-9) ||
+      (thdDir < 0 && thdV >= -1e-9)
+    if (crossedZero) {
       tauHold = constrained
         ? rhs1NoFric + jac * rhs2 - (m12 + jac * m22) * jacDot * thdV
         : rhs1NoFric - (m12 / m22) * rhs2
-      tauFric =
-        Math.abs(tauHold) <= tauBearing
-          ? tauHold
-          : tauBearing * (tauHold >= 0 ? 1 : -1)
-      pFric = 0
+      if (Math.abs(tauHold) <= tauBearing) {
+        tauFric = tauHold
+        pFric = 0
+      } else {
+        tauFric = tauBearing * (tauHold >= 0 ? 1 : -1)
+        pFric = Math.abs(thdV) < 1e-9 ? 0 : tauBearing * Math.abs(thdV)
+      }
     } else {
       tauFric = tauBearing * (thdV >= 0 ? 1 : -1)
       pFric = tauBearing * Math.abs(thdV)
@@ -1787,7 +2090,8 @@ function solveTrebuchetLaunch(
     const tPrev = t
     const fricPrev = frictionLossJ
 
-    const k1 = evalRhs(th, thd, beta, betad, inTrough)
+    const thdDir = thdPrev > 1e-9 ? 1 : thdPrev < -1e-9 ? -1 : 0
+    const k1 = evalRhs(th, thd, beta, betad, inTrough, 0)
     if (step === 0 && Math.abs(thd) < 1e-9 && k1.dthd <= 0) {
       thd = 0
       betad = 0
@@ -1802,21 +2106,24 @@ function solveTrebuchetLaunch(
       thd + 0.5 * dtS * k1.dthd,
       beta + 0.5 * dtS * k1.db,
       betad + 0.5 * dtS * k1.dbd,
-      inTrough
+      inTrough,
+      thdDir
     )
     const k3 = evalRhs(
       th + 0.5 * dtS * k2.dth,
       thd + 0.5 * dtS * k2.dthd,
       beta + 0.5 * dtS * k2.db,
       betad + 0.5 * dtS * k2.dbd,
-      inTrough
+      inTrough,
+      thdDir
     )
     const k4 = evalRhs(
       th + dtS * k3.dth,
       thd + dtS * k3.dthd,
       beta + dtS * k3.db,
       betad + dtS * k3.dbd,
-      inTrough
+      inTrough,
+      thdDir
     )
 
     th += (dtS / 6) * (k1.dth + 2 * k2.dth + 2 * k3.dth + k4.dth)

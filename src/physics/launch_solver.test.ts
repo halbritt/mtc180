@@ -3,6 +3,7 @@ import {
   DIRECT_ARM_1TRAP,
   DIRECT_ARM_RAIL,
   DIRECT_CUP_2TRAP,
+  FLOOR_FLUSH_INCLINED_RAMP,
   GRAVITY_SLING_TREBUCHET,
   LAUNCHER_MODELS,
   V41_TILTED_CRADLE,
@@ -552,6 +553,115 @@ describe('launch_solver edge cases, cycle timing, and zero-DOM isolation', () =>
     expect(rV51Blocked.launchAngleDeg).toBe(58)
     expect(rV51Blocked.energyBudget.springInitialJ).toBe(0)
     expect(sumEnergy(rV51Blocked.energyBudget)).toBe(0)
+  })
+
+  it('stalls cleanly without Coulomb sign-chatter, interpolates psiEndDeg slack crossings, and uses actual zBall0M on clamped trebuchet starts', () => {
+    // 1. RK4 Coulomb stall without sign-chatter across cord_horn, inclined_ramp, and tilted_cradle
+    const v51NearStall: LauncherModel = {
+      ...V51_CORD_HORN,
+      trapBank: { ...V51_CORD_HORN.trapBank, bearingFrictionNm: 0.05 },
+    }
+    const rampNearStall: LauncherModel = {
+      ...FLOOR_FLUSH_INCLINED_RAMP,
+      trapBank: { ...FLOOR_FLUSH_INCLINED_RAMP.trapBank, bearingFrictionNm: 0.3 },
+      linkage: {
+        ...FLOOR_FLUSH_INCLINED_RAMP.linkage,
+        muChute: 0.8,
+      } as LauncherModel['linkage'],
+    }
+    const v41NearStall: LauncherModel = {
+      ...V41_TILTED_CRADLE,
+      trapBank: {
+        ...V41_TILTED_CRADLE.trapBank,
+        bearingFrictionNm: 1.2,
+        torqueRatio: 0,
+      },
+    }
+
+    for (const dtS of [0.0005, 0.00025]) {
+      for (const [label, m, nomE] of [
+        ['v51_near_stall', v51NearStall, 0.2],
+        ['ramp_near_stall', rampNearStall, 0.8],
+        ['v41_near_stall', v41NearStall, 2.12],
+      ] as const) {
+        const res = solveLaunch(
+          m,
+          defaultAdjustments(m),
+          makeEnv({ nominalEnergyJ: nomE, dtS }),
+          makeRng(201),
+          { deterministic: true }
+        )
+        expect(res.leftCradle, `${label} dt=${dtS}`).toBe(false)
+        expect(res.tReleaseS, `${label} dt=${dtS} tReleaseS`).toBeLessThan(0.5)
+        expect(res.launchSpeedMps, `${label} dt=${dtS}`).toBe(0)
+        const err =
+          Math.abs(sumEnergy(res.energyBudget) - res.energyBudget.springInitialJ) /
+          res.energyBudget.springInitialJ
+        expect(err, `${label} dt=${dtS} err=${err}`).toBeLessThan(0.01)
+      }
+
+      // 2. Interpolated psi == psiEndDeg slack crossing on cordLengthOffsetMm = +20
+      const v50LongCord: LauncherModel = {
+        ...V50_CIRCULAR_CAM,
+        linkage: {
+          ...V50_CIRCULAR_CAM.linkage,
+          cordLengthOffsetMm: 20,
+        } as unknown as LauncherModel['linkage'],
+      }
+      const rV50Off = solveLaunch(
+        v50LongCord,
+        { notch: 1, launchDeg: 34, yawDeg: 0 },
+        makeEnv({ dtS }),
+        makeRng(202),
+        { deterministic: true }
+      )
+      const v50OffErr =
+        Math.abs(sumEnergy(rV50Off.energyBudget) - rV50Off.energyBudget.springInitialJ) /
+        rV50Off.energyBudget.springInitialJ
+      expect(v50OffErr, `v50 off=20 dt=${dtS} err=${v50OffErr}`).toBeLessThan(0.01)
+
+      const v51LongCord: LauncherModel = {
+        ...V51_CORD_HORN,
+        trapBank: { ...V51_CORD_HORN.trapBank, bearingFrictionNm: 0 },
+        linkage: {
+          ...V51_CORD_HORN.linkage,
+          cordLengthOffsetMm: 20,
+        } as unknown as LauncherModel['linkage'],
+      }
+      const rV51Off = solveLaunch(
+        v51LongCord,
+        { notch: 1, launchDeg: 42, yawDeg: 0 },
+        makeEnv({ nominalEnergyJ: 0.15, dtS }),
+        makeRng(203),
+        { deterministic: true }
+      )
+      const v51OffErr =
+        Math.abs(sumEnergy(rV51Off.energyBudget) - rV51Off.energyBudget.springInitialJ) /
+        rV51Off.energyBudget.springInitialJ
+      expect(v51OffErr, `v51 off=20 dt=${dtS} err=${v51OffErr}`).toBeLessThan(0.01)
+    }
+
+    // 3. Trebuchet clamped sinB0 (cockAngleDeg = 0, mu = 0) uses actual initial ball height
+    const trebCock0: LauncherModel = {
+      ...GRAVITY_SLING_TREBUCHET,
+      trapBank: { ...GRAVITY_SLING_TREBUCHET.trapBank, bearingFrictionNm: 0 },
+      linkage: {
+        ...GRAVITY_SLING_TREBUCHET.linkage,
+        cockAngleDeg: 0,
+      } as LauncherModel['linkage'],
+    }
+    const rTreb0 = solveLaunch(
+      trebCock0,
+      defaultAdjustments(trebCock0),
+      makeEnv({ dtS: 0.0005 }),
+      makeRng(204),
+      { deterministic: true }
+    )
+    expect(rTreb0.leftCradle).toBe(true)
+    const treb0Err =
+      Math.abs(sumEnergy(rTreb0.energyBudget) - rTreb0.energyBudget.springInitialJ) /
+      rTreb0.energyBudget.springInitialJ
+    expect(treb0Err, `treb cock=0 err=${treb0Err}`).toBeLessThan(0.001)
   })
 
   it('contains zero DOM, node:*, or third-party physics engine imports in M2 physics modules', () => {
