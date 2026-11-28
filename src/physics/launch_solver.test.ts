@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DIRECT_ARM_1TRAP,
   DIRECT_ARM_RAIL,
+  DIRECT_CUP_2TRAP,
   GRAVITY_SLING_TREBUCHET,
   LAUNCHER_MODELS,
   V41_TILTED_CRADLE,
@@ -408,6 +410,148 @@ describe('launch_solver edge cases, cycle timing, and zero-DOM isolation', () =>
     )
     expect(rTreb.cycleTimeS).toBeCloseTo(10.5, 6)
     expect(rTreb.posM[2]).toBeGreaterThanOrEqual(0)
+  })
+
+  it('remediates all M2 adversarial energy-conservation, stall, crossing, and stop-blocked edge cases', () => {
+    const env = makeEnv()
+
+    // 1. pocketed_petals trapped ball does not double-count KE in frictionLossJ & keRotArmBailsJ
+    for (const baseModel of [
+      V41_TILTED_CRADLE,
+      {
+        ...DIRECT_CUP_2TRAP,
+        cradle: { ...DIRECT_CUP_2TRAP.cradle, type: 'pocketed_petals' as const },
+      },
+    ]) {
+      const trapped: LauncherModel = {
+        ...baseModel,
+        cradle: { ...baseModel.cradle, retentionForceN: 500 },
+      }
+      const rTrap = solveLaunch(
+        trapped,
+        defaultAdjustments(trapped),
+        env,
+        makeRng(101),
+        { deterministic: true }
+      )
+      expect(rTrap.leftCradle).toBe(false)
+      expect(rTrap.energyBudget.keTransBallJ).toBe(0)
+      expect(rTrap.energyBudget.keRotBallJ).toBe(0)
+      const relErr =
+        Math.abs(sumEnergy(rTrap.energyBudget) - rTrap.energyBudget.springInitialJ) /
+        rTrap.energyBudget.springInitialJ
+      expect(relErr, `${baseModel.id} trapped err=${relErr}`).toBeLessThan(0.001)
+    }
+
+    // 2. gravity_sling_trebuchet static friction stall (mu=2.5) and timeout/non-release ball KE (mu=0.7)
+    const trebStall: LauncherModel = {
+      ...GRAVITY_SLING_TREBUCHET,
+      linkage: {
+        ...GRAVITY_SLING_TREBUCHET.linkage,
+        bearingFrictionCoeff: 2.5,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const rTrebStall = solveLaunch(
+      trebStall,
+      defaultAdjustments(trebStall),
+      env,
+      makeRng(102),
+      { deterministic: true }
+    )
+    expect(rTrebStall.leftCradle).toBe(false)
+    expect(rTrebStall.armTraceSamples.length).toBe(1)
+    expect(rTrebStall.energyBudget.springInitialJ).toBe(0)
+    expect(sumEnergy(rTrebStall.energyBudget)).toBe(0)
+
+    const trebHighFric: LauncherModel = {
+      ...GRAVITY_SLING_TREBUCHET,
+      linkage: {
+        ...GRAVITY_SLING_TREBUCHET.linkage,
+        bearingFrictionCoeff: 0.7,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const rTrebFric = solveLaunch(
+      trebHighFric,
+      defaultAdjustments(trebHighFric),
+      env,
+      makeRng(103),
+      { deterministic: true }
+    )
+    expect(rTrebFric.leftCradle).toBe(false)
+    const trebErr =
+      rTrebFric.energyBudget.springInitialJ > 0
+        ? Math.abs(sumEnergy(rTrebFric.energyBudget) - rTrebFric.energyBudget.springInitialJ) /
+          rTrebFric.energyBudget.springInitialJ
+        : Math.abs(sumEnergy(rTrebFric.energyBudget))
+    expect(trebErr).toBeLessThan(0.01)
+
+    // 3. direct_rail mid-stroke timeout/stall includes full 2-DOF radial sd KE
+    const railTimeout: LauncherModel = {
+      ...DIRECT_ARM_RAIL,
+      linkage: {
+        ...DIRECT_ARM_RAIL.linkage,
+        bearingFrictionCoeff: 0.7,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const rRailTimeout = solveLaunch(
+      railTimeout,
+      defaultAdjustments(railTimeout),
+      env,
+      makeRng(104),
+      { deterministic: true }
+    )
+    expect(rRailTimeout.leftCradle).toBe(false)
+    const railErr =
+      Math.abs(sumEnergy(rRailTimeout.energyBudget) - rRailTimeout.energyBudget.springInitialJ) /
+      rRailTimeout.energyBudget.springInitialJ
+    expect(railErr).toBeLessThan(0.01)
+
+    const rail1TrapStall: LauncherModel = {
+      ...DIRECT_ARM_1TRAP,
+      linkage: {
+        ...DIRECT_ARM_1TRAP.linkage,
+        bearingFrictionCoeff: 0.2,
+      } as unknown as LauncherModel['linkage'],
+    }
+    const rRail1Trap = solveLaunch(
+      rail1TrapStall,
+      defaultAdjustments(rail1TrapStall),
+      env,
+      makeRng(105),
+      { deterministic: true }
+    )
+    expect(rRail1Trap.leftCradle).toBe(false)
+    const rail1Err =
+      Math.abs(sumEnergy(rRail1Trap.energyBudget) - rRail1Trap.energyBudget.springInitialJ) /
+      rRail1Trap.energyBudget.springInitialJ
+    expect(rail1Err).toBeLessThan(0.01)
+
+    // 4. v50_circular_cam (notch: 2, launchDeg: 34, dtS: 0.0005) th == thRestDeg crossing interpolation
+    const rV50MaxDt = solveLaunch(
+      V50_CIRCULAR_CAM,
+      { notch: 2, launchDeg: 34, yawDeg: 0 },
+      makeEnv({ dtS: 0.0005 }),
+      makeRng(106),
+      { deterministic: true }
+    )
+    const v50Err =
+      Math.abs(sumEnergy(rV50MaxDt.energyBudget) - rV50MaxDt.energyBudget.springInitialJ) /
+      rV50MaxDt.energyBudget.springInitialJ
+    expect(v50Err).toBeLessThan(0.005)
+
+    // 5. v51_cord_horn (notch: 1, launchDeg: 58) stop-blocked guard (0.00 m/s)
+    const rV51Blocked = solveLaunch(
+      V51_CORD_HORN,
+      { notch: 1, launchDeg: 58, yawDeg: 0 },
+      env,
+      makeRng(107),
+      { deterministic: true }
+    )
+    expect(rV51Blocked.leftCradle).toBe(false)
+    expect(rV51Blocked.launchSpeedMps).toBe(0)
+    expect(rV51Blocked.launchAngleDeg).toBe(58)
+    expect(rV51Blocked.energyBudget.springInitialJ).toBe(0)
+    expect(sumEnergy(rV51Blocked.energyBudget)).toBe(0)
   })
 
   it('contains zero DOM, node:*, or third-party physics engine imports in M2 physics modules', () => {

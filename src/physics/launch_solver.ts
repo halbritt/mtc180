@@ -16,6 +16,7 @@ import {
   createTorsionSpringSpec,
   instantaneousSpringTorque,
   sampleSpringBankEnergy,
+  springTorque,
   springWork,
   type TorsionSpringSpec,
 } from './spring'
@@ -253,7 +254,7 @@ function solveCordLinkageLaunch(
   )
   const psiNominalCock = lk.notchPsisDeg[notchIdx]
   const launchDeg = adj.launchDeg ?? 42
-  const psiStopDeg = Math.max(psiNominalCock + 2, 90 - launchDeg + stopJitterDeg)
+  const psiStopDeg = 90 - launchDeg + stopJitterDeg
 
   // Apply cocking jitter while keeping cord cockable if nominal notch was reachable
   let psiCockDeg = psiNominalCock + cockJitterDeg
@@ -278,7 +279,8 @@ function solveCordLinkageLaunch(
   const initBallPos = cockedBallPos(psiCockDeg)
   const cockedBallBottomHeightM = initBallPos.z - model.projectile.radiusM
 
-  if (!table.reachable || table.psisDeg.length < 2) {
+  if (!table.reachable || table.psisDeg.length < 2 || psiStopDeg <= psiCockDeg) {
+    const blockedByStop = table.reachable && psiStopDeg <= psiCockDeg
     return {
       tReleaseS: 0,
       posM: rotateSagittalToWorld(initBallPos.x, initBallPos.z, yawRad),
@@ -295,8 +297,15 @@ function solveCordLinkageLaunch(
       wastedStopKeJ: 0,
       leftCradle: false,
       launchSpeedMps: 0,
-      launchAngleDeg: 0,
-      armTraceSamples: [{ t: 0, psiDeg: psiCockDeg, thDeg: model.trapBank.thCockMaxDeg, omegaArm: 0 }],
+      launchAngleDeg: blockedByStop ? launchDeg : 0,
+      armTraceSamples: [
+        {
+          t: 0,
+          psiDeg: psiCockDeg,
+          thDeg: blockedByStop ? table.thCockDeg : model.trapBank.thCockMaxDeg,
+          omegaArm: 0,
+        },
+      ],
       cycleTimeS,
       cockedBallBottomHeightM,
       cordSlackAtDeg: null,
@@ -386,6 +395,13 @@ function solveCordLinkageLaunch(
     const tPrev = t
     const fricPrev = frictionLossJ
 
+    let slackStepArmFric = 0
+    let slackStepBailFric = 0
+    let slackBailHitAlpha = 2
+    let slackBailImpactLoss = 0
+    let usedSlackStep = false
+    let stepBailAtFrac: ((frac: number) => { th1: number; wb1: number; dFricB: number }) | null = null
+
     if (taut && psi < table.psiEndDeg && th > thRestDeg) {
       const r0 = evalTautRhs(psi, w)
       // Check static stall at start
@@ -460,92 +476,142 @@ function solveCordLinkageLaunch(
         const h1End = table.h1[table.h1.length - 1]
         th = Math.max(thRestDeg, table.thOfPsiDeg[table.thOfPsiDeg.length - 1])
         wb = h1End * w
-      }
-    } else {
-      if (taut) {
-        taut = false
-        if (cordSlackAtDeg === null) cordSlackAtDeg = th
-      }
-      const evalSlackRhs = (pVal: number, wVal: number, tVal: number, wbVal: number) => {
-        const gravA = gravArmTorque(pVal)
-        const fricA = Math.abs(wVal) > 1e-9 ? tauBearing * (wVal >= 0 ? 1 : -1) : 0
-        const accA = (-gravA - fricA) / iArmBall
-        const pFricA = Math.abs(wVal) > 1e-9 ? tauBearing * Math.abs(wVal) : 0
-
-        let accB = 0
-        let pFricB = 0
-        if (tVal > thRestDeg) {
-          const tq = instantaneousSpringTorque(spring, tVal)
-          const gravB = bailMx * g * Math.cos(tVal * DEG_TO_RAD)
-          const fricB = Math.abs(wbVal) > 1e-9 ? tauBearing * (wbVal >= 0 ? 1 : -1) : 0
-          accB = (-tq - gravB - fricB) / iBail
-          pFricB = Math.abs(wbVal) > 1e-9 ? tauBearing * Math.abs(wbVal) : 0
-        }
-        return { accA, accB, pFric: pFricA + pFricB }
-      }
-
-      const r1 = evalSlackRhs(psi, w, th, wb)
-      const psiRad0 = psi * DEG_TO_RAD
-      const etZ0 = (-oxM * Math.cos(psiRad0) - ozM * Math.sin(psiRad0)) / rBallM
-      if (w > 1.0 && mBall * (rBallM * r1.accA + g * etZ0) < 0) {
-        leftCradle = true
-        break
-      }
-
-      const k1p = w * RAD_TO_DEG
-      const k1w = r1.accA
-      const k1t = th > thRestDeg ? wb * RAD_TO_DEG : 0
-      const k1wb = r1.accB
-      const k1f = r1.pFric
-
-      const r2 = evalSlackRhs(
-        psi + 0.5 * dtS * k1p,
-        w + 0.5 * dtS * k1w,
-        th + 0.5 * dtS * k1t,
-        wb + 0.5 * dtS * k1wb
-      )
-      const k2p = (w + 0.5 * dtS * k1w) * RAD_TO_DEG
-      const k2w = r2.accA
-      const k2t = th + 0.5 * dtS * k1t > thRestDeg ? (wb + 0.5 * dtS * k1wb) * RAD_TO_DEG : 0
-      const k2wb = r2.accB
-      const k2f = r2.pFric
-
-      const r3 = evalSlackRhs(
-        psi + 0.5 * dtS * k2p,
-        w + 0.5 * dtS * k2w,
-        th + 0.5 * dtS * k2t,
-        wb + 0.5 * dtS * k2wb
-      )
-      const k3p = (w + 0.5 * dtS * k2w) * RAD_TO_DEG
-      const k3w = r3.accA
-      const k3t = th + 0.5 * dtS * k2t > thRestDeg ? (wb + 0.5 * dtS * k2wb) * RAD_TO_DEG : 0
-      const k3wb = r3.accB
-      const k3f = r3.pFric
-
-      const r4 = evalSlackRhs(
-        psi + dtS * k3p,
-        w + dtS * k3w,
-        th + dtS * k3t,
-        wb + dtS * k3wb
-      )
-      const k4p = (w + dtS * k3w) * RAD_TO_DEG
-      const k4w = r4.accA
-      const k4t = th + dtS * k3t > thRestDeg ? (wb + dtS * k3wb) * RAD_TO_DEG : 0
-      const k4wb = r4.accB
-      const k4f = r4.pFric
-
-      psi += (dtS / 6) * (k1p + 2 * k2p + 2 * k3p + k4p)
-      w += (dtS / 6) * (k1w + 2 * k2w + 2 * k3w + k4w)
-      if (th > thRestDeg) {
-        th += (dtS / 6) * (k1t + 2 * k2t + 2 * k3t + k4t)
-        wb += (dtS / 6) * (k1wb + 2 * k2wb + 2 * k3wb + k4wb)
         if (th <= thRestDeg) {
           th = thRestDeg
           frictionLossJ += 0.5 * iBail * wb * wb
           wb = 0
         }
       }
-      frictionLossJ += (dtS / 6) * (k1f + 2 * k2f + 2 * k3f + k4f)
+    } else {
+      usedSlackStep = true
+      if (taut) {
+        taut = false
+        if (cordSlackAtDeg === null) cordSlackAtDeg = th
+      }
+      const evalArmSlackRhs = (pVal: number, wVal: number) => {
+        const gravA = gravArmTorque(pVal)
+        const fricA = Math.abs(wVal) > 1e-9 ? tauBearing * (wVal >= 0 ? 1 : -1) : 0
+        const accA = (-gravA - fricA) / iArmBall
+        const pFricA = Math.abs(wVal) > 1e-9 ? tauBearing * Math.abs(wVal) : 0
+        return { accA, pFricA }
+      }
+      const evalBailSlackRhs = (tVal: number, wbVal: number) => {
+        const tq =
+          spring.count > 0 && spring.totalEnergyJ > 0
+            ? springTorque(
+                tVal,
+                spring.totalEnergyJ,
+                spring.torqueRatio,
+                spring.springZeroOffsetDeg
+              )
+            : 0
+        const gravB = bailMx * g * Math.cos(tVal * DEG_TO_RAD)
+        const tauBailDrive = -tq - gravB
+        if (Math.abs(wbVal) < 1e-9 && Math.abs(tauBailDrive) <= tauBearing) {
+          return { accB: 0, pFricB: 0 }
+        }
+        const fricB = tauBearing * (wbVal >= 0 ? 1 : -1)
+        const accB = (tauBailDrive - fricB) / iBail
+        const pFricB = Math.abs(wbVal) > 1e-9 ? tauBearing * Math.abs(wbVal) : 0
+        return { accB, pFricB }
+      }
+
+      const rA1 = evalArmSlackRhs(psi, w)
+      const psiRad0 = psi * DEG_TO_RAD
+      const etZ0 = (-oxM * Math.cos(psiRad0) - ozM * Math.sin(psiRad0)) / rBallM
+      if (w > 1.0 && mBall * (rBallM * rA1.accA + g * etZ0) < 0) {
+        leftCradle = true
+        break
+      }
+
+      const k1p = w * RAD_TO_DEG
+      const k1w = rA1.accA
+      const k1f = rA1.pFricA
+
+      const rA2 = evalArmSlackRhs(psi + 0.5 * dtS * k1p, w + 0.5 * dtS * k1w)
+      const k2p = (w + 0.5 * dtS * k1w) * RAD_TO_DEG
+      const k2w = rA2.accA
+      const k2f = rA2.pFricA
+
+      const rA3 = evalArmSlackRhs(psi + 0.5 * dtS * k2p, w + 0.5 * dtS * k2w)
+      const k3p = (w + 0.5 * dtS * k2w) * RAD_TO_DEG
+      const k3w = rA3.accA
+      const k3f = rA3.pFricA
+
+      const rA4 = evalArmSlackRhs(psi + dtS * k3p, w + dtS * k3w)
+      const k4p = (w + dtS * k3w) * RAD_TO_DEG
+      const k4w = rA4.accA
+      const k4f = rA4.pFricA
+
+      psi += (dtS / 6) * (k1p + 2 * k2p + 2 * k3p + k4p)
+      w += (dtS / 6) * (k1w + 2 * k2w + 2 * k3w + k4w)
+      slackStepArmFric = (dtS / 6) * (k1f + 2 * k2f + 2 * k3f + k4f)
+
+      stepBailAtFrac = (frac: number) => {
+        const h = frac * dtS
+        if (h <= 0 || thPrev <= thRestDeg) {
+          return { th1: thPrev, wb1: wbPrev, dFricB: 0 }
+        }
+        const b1 = evalBailSlackRhs(thPrev, wbPrev)
+        const b1t = wbPrev * RAD_TO_DEG
+        const b1w = b1.accB
+        const b1f = b1.pFricB
+
+        const th2 = thPrev + 0.5 * h * b1t
+        const wb2 = wbPrev + 0.5 * h * b1w
+        const b2 = evalBailSlackRhs(th2, wb2)
+        const b2t = wb2 * RAD_TO_DEG
+        const b2w = b2.accB
+        const b2f = b2.pFricB
+
+        const th3 = thPrev + 0.5 * h * b2t
+        const wb3 = wbPrev + 0.5 * h * b2w
+        const b3 = evalBailSlackRhs(th3, wb3)
+        const b3t = wb3 * RAD_TO_DEG
+        const b3w = b3.accB
+        const b3f = b3.pFricB
+
+        const th4 = thPrev + h * b3t
+        const wb4 = wbPrev + h * b3w
+        const b4 = evalBailSlackRhs(th4, wb4)
+        const b4t = wb4 * RAD_TO_DEG
+        const b4w = b4.accB
+        const b4f = b4.pFricB
+
+        return {
+          th1: thPrev + (h / 6) * (b1t + 2 * b2t + 2 * b3t + b4t),
+          wb1: wbPrev + (h / 6) * (b1w + 2 * b2w + 2 * b3w + b4w),
+          dFricB: (h / 6) * (b1f + 2 * b2f + 2 * b3f + b4f),
+        }
+      }
+
+      if (thPrev > thRestDeg) {
+        const bailFull = stepBailAtFrac(1)
+        if (bailFull.th1 > thRestDeg) {
+          th = bailFull.th1
+          wb = bailFull.wb1
+          slackStepBailFric = bailFull.dFricB
+        } else {
+          const denomTh = thPrev - bailFull.th1
+          let fracHit = denomTh > 1e-12 ? (thPrev - thRestDeg) / denomTh : 1
+          fracHit = Math.max(0, Math.min(1, fracHit))
+          let bailHit = stepBailAtFrac(fracHit)
+          if (Math.abs(bailHit.th1 - thRestDeg) > 1e-7 && Math.abs(bailHit.wb1) > 1e-6) {
+            fracHit = Math.max(
+              0,
+              Math.min(1, fracHit - (bailHit.th1 - thRestDeg) / (bailHit.wb1 * RAD_TO_DEG * dtS))
+            )
+            bailHit = stepBailAtFrac(fracHit)
+          }
+          slackBailHitAlpha = fracHit
+          slackStepBailFric = bailHit.dFricB
+          slackBailImpactLoss = 0.5 * iBail * bailHit.wb1 * bailHit.wb1
+          th = thRestDeg
+          wb = 0
+        }
+      }
+
+      frictionLossJ = fricPrev + slackStepArmFric + slackStepBailFric + slackBailImpactLoss
       t += dtS
 
       // Check snap-taut overrun
@@ -568,15 +634,30 @@ function solveCordLinkageLaunch(
 
     // Clamp negative arm rate (stall) cleanly without negative-velocity oscillation
     if (w <= 0) {
+      const alpha = wPrev > 0 && w < 0 ? wPrev / (wPrev - w) : 1
       if (wPrev > 0 && w < 0) {
-        const alpha = wPrev / (wPrev - w)
         psi = psiPrev + alpha * (psi - psiPrev)
-        th = thPrev + alpha * (th - thPrev)
         t = tPrev + alpha * (t - tPrev)
-        frictionLossJ = fricPrev + alpha * (frictionLossJ - fricPrev)
+        if (usedSlackStep) {
+          if (stepBailAtFrac && thPrev > thRestDeg && alpha < slackBailHitAlpha) {
+            const bailAtStop = stepBailAtFrac(alpha)
+            th = bailAtStop.th1
+            wb = bailAtStop.wb1
+            frictionLossJ = fricPrev + alpha * slackStepArmFric + bailAtStop.dFricB
+          } else {
+            frictionLossJ =
+              fricPrev + alpha * slackStepArmFric + slackStepBailFric + slackBailImpactLoss
+          }
+        } else {
+          th = thPrev + alpha * (th - thPrev)
+          wb = th <= thRestDeg ? 0 : wbPrev + alpha * (wb - wbPrev)
+          frictionLossJ = fricPrev + alpha * (frictionLossJ - fricPrev)
+        }
       }
       w = 0
-      wb = 0
+      if (!usedSlackStep || th <= thRestDeg) {
+        wb = 0
+      }
       stalled = true
       if (t > samples[samples.length - 1].t + 1e-12) {
         samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: 0 })
@@ -590,10 +671,22 @@ function solveCordLinkageLaunch(
       const alpha = denom > 1e-12 ? (psiStopDeg - psiPrev) / denom : 1
       psi = psiStopDeg
       w = wPrev + alpha * (w - wPrev)
-      th = thPrev + alpha * (th - thPrev)
-      wb = wbPrev + alpha * (wb - wbPrev)
       t = tPrev + alpha * (t - tPrev)
-      frictionLossJ = fricPrev + alpha * (frictionLossJ - fricPrev)
+      if (usedSlackStep) {
+        if (stepBailAtFrac && thPrev > thRestDeg && alpha < slackBailHitAlpha) {
+          const bailAtStop = stepBailAtFrac(alpha)
+          th = bailAtStop.th1
+          wb = bailAtStop.wb1
+          frictionLossJ = fricPrev + alpha * slackStepArmFric + bailAtStop.dFricB
+        } else {
+          frictionLossJ =
+            fricPrev + alpha * slackStepArmFric + slackStepBailFric + slackBailImpactLoss
+        }
+      } else {
+        th = thPrev + alpha * (th - thPrev)
+        wb = wbPrev + alpha * (wb - wbPrev)
+        frictionLossJ = fricPrev + alpha * (frictionLossJ - fricPrev)
+      }
       leftCradle = true
       if (t > samples[samples.length - 1].t + 1e-12) {
         samples.push({ t, psiDeg: psi, thDeg: th, omegaArm: w })
@@ -816,9 +909,20 @@ function solveDirectRailLaunch(
     frictionLossJ += (dtS / 6) * (k1.pFric + 2 * k2.pFric + 2 * k3.pFric + k4.pFric)
     t += dtS
 
-    if (s < 0) {
+    if (s <= 0) {
+      if (sd < 0) {
+        const x = cfg.x0M
+        const yy = cfg.y0M
+        const a_ = x * x + yy * yy
+        const b_ = -x * sg - yy * cg
+        const c_ = mBall * b_ - ib / ae
+        const m11 = cfg.inertiaBaseKgM2 + mBall * a_ + ib
+        const det = m11 * ms - c_ * c_
+        frictionLossJ += 0.5 * (det / m11) * sd * sd
+        phid += (c_ / m11) * sd
+        sd = 0
+      }
       s = 0
-      if (sd < 0) sd = 0
     }
 
     if (phid <= 0) {
@@ -826,11 +930,14 @@ function solveDirectRailLaunch(
         const a = pdPrev / (pdPrev - phid)
         phi = phiPrev + a * (phi - phiPrev)
         s = Math.max(0, sPrev + a * (s - sPrev))
+        sd = s <= 1e-9 ? Math.max(0, sdPrev + a * (sd - sdPrev)) : sdPrev + a * (sd - sdPrev)
         t = tPrev + a * (t - tPrev)
         frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
       }
       phid = 0
-      sd = 0
+      if (s <= 1e-9 && sd < 0) {
+        sd = 0
+      }
       leftCradle = false
       if (t > samples[samples.length - 1].t + 1e-12) {
         const thD = (thCockRad - phi) * RAD_TO_DEG
@@ -899,11 +1006,16 @@ function solveDirectRailLaunch(
 
   const keTransBallJ = 0.5 * mBall * (vxSag * vxSag + vzSag * vzSag)
   const keRotBallJ = 0.5 * ib * omegaYSag * omegaYSag
-  const keArmBailJ =
-    0.5 *
-    (cfg.inertiaBaseKgM2 + (leftCradle ? 0 : mBall * (x * x + yy * yy) + ib)) *
-    phid *
-    phid
+  let keArmBailJ: number
+  if (leftCradle) {
+    keArmBailJ = 0.5 * cfg.inertiaBaseKgM2 * phid * phid
+  } else {
+    const a_ = x * x + yy * yy
+    const b_ = -x * sg - yy * cg
+    const c_ = mBall * b_ - ib / ae
+    const m11 = cfg.inertiaBaseKgM2 + mBall * a_ + ib
+    keArmBailJ = 0.5 * (m11 * phid * phid + 2 * c_ * phid * sd + ms * sd * sd)
+  }
   const peGravityDeltaJ = totalPe(thRelRad, s) - peStart
   const springInitialJ = springWork(
     cfg.thCockDeg,
@@ -1009,7 +1121,7 @@ function solveCoaxialCupOrTiltedLaunch(
     const a = worldAngleRad(thDeg)
     const bp = ballPos(thDeg)
     const zCg = pzM + cgxM * Math.sin(a) - cgzM * Math.cos(a)
-    const zBail = bailMx * Math.sin(thDeg * DEG_TO_RAD)
+    const zBail = bailMx * Math.sin(a)
     return mBall * g * bp.z + mArm * g * zCg + g * zBail
   }
 
@@ -1020,7 +1132,7 @@ function solveCoaxialCupOrTiltedLaunch(
     const s = Math.sin(a)
     const dZBall = -oxM * c - ozM * s
     const dZCg = -cgxM * c - cgzM * s
-    const dZBail = -bailMx * Math.cos(thDeg * DEG_TO_RAD)
+    const dZBail = -bailMx * c
     return g * (mBall * dZBall + mArm * dZCg + dZBail)
   }
 
@@ -1171,7 +1283,6 @@ function solveCoaxialCupOrTiltedLaunch(
           ? model.cradle.snapEnergyJ
           : fRet * dPetal
     if (keTransBallJ <= barrierJ) {
-      frictionLossJ += keTransBallJ + keRotBallJ
       vxSag = 0
       vzSag = 0
       speedPre = 0
@@ -1490,8 +1601,12 @@ function solveInclinedRampLaunch(
   const velMps = rotateSagittalToWorld(vxSag, vzSag, yawRad)
 
   const keTransBallJ = 0.5 * mBall * (vxSag * vxSag + vzSag * vzSag)
-  if (taut && !leftCradle) {
-    keArmBailStopJ = 0.5 * (iBail + mSled * Math.pow(bailLevM(th), 2)) * wb * wb
+  if (!leftCradle && vBall > 0) {
+    if (taut) {
+      keArmBailStopJ = 0.5 * (iBail + mTot * Math.pow(bailLevM(th), 2)) * wb * wb
+    } else {
+      keArmBailStopJ += 0.5 * mBall * vBall * vBall
+    }
   }
   const peGravityDeltaJ =
     mSled * g * sSled * sinB +
@@ -1609,25 +1724,43 @@ function solveTrebuchetLaunch(
 
     const tauCw = mCw * g * kc
     const tauGravArmBall = (mArm * cgArm + mEff * la) * g * cTh
-    const tauFric =
-      Math.abs(thdV) < 1e-9 && tauCw - tauGravArmBall <= tauBearing
-        ? tauCw - tauGravArmBall
-        : tauBearing * (thdV >= 0 ? 1 : -1)
-    const pFric = Math.abs(thdV) > 1e-9 ? tauBearing * Math.abs(thdV) : 0
-
-    const rhs1 =
+    const rhs1NoFric =
       tauCw -
       tauGravArmBall -
-      tauFric -
       mCw * kc * dkc * thdV * thdV +
       mEff * la * ls * sDiff * bdV * bdV
     const rhs2 = mEff * g * ls * cB - mEff * la * ls * sDiff * thdV * thdV
+
+    const safeCb = Math.abs(cB) > 1e-4 ? cB : cB >= 0 ? 1e-4 : -1e-4
+    const jac = (la * cTh) / (ls * safeCb)
+    const jacDot =
+      (-la * sTh * thdV * (ls * safeCb) + la * cTh * (ls * Math.sin(bV) * bdV)) /
+      (ls * ls * safeCb * safeCb)
+
+    let tauHold = 0
+    let tauFric: number
+    let pFric: number
+    if (Math.abs(thdV) < 1e-9) {
+      tauHold = constrained
+        ? rhs1NoFric + jac * rhs2 - (m12 + jac * m22) * jacDot * thdV
+        : rhs1NoFric - (m12 / m22) * rhs2
+      tauFric =
+        Math.abs(tauHold) <= tauBearing
+          ? tauHold
+          : tauBearing * (tauHold >= 0 ? 1 : -1)
+      pFric = 0
+    } else {
+      tauFric = tauBearing * (thdV >= 0 ? 1 : -1)
+      pFric = tauBearing * Math.abs(thdV)
+    }
+
+    const rhs1 = rhs1NoFric - tauFric
     const det = m11 * m22 - m12 * m12
     const thddFree = (m22 * rhs1 - m12 * rhs2) / det
     const bddFree = (-m12 * rhs1 + m11 * rhs2) / det
 
     if (!constrained) {
-      return { dth: thdV, db: bdV, dthd: thddFree, dbd: bddFree, pFric, freeAz: 1 }
+      return { dth: thdV, db: bdV, dthd: thddFree, dbd: bddFree, pFric, freeAz: 1, tauHold }
     }
 
     const freeAz =
@@ -1636,18 +1769,13 @@ function solveTrebuchetLaunch(
       ls * cB * bddFree +
       ls * Math.sin(bV) * bdV * bdV
     if (freeAz > 0) {
-      return { dth: thdV, db: bdV, dthd: thddFree, dbd: bddFree, pFric, freeAz }
+      return { dth: thdV, db: bdV, dthd: thddFree, dbd: bddFree, pFric, freeAz, tauHold }
     }
 
-    const safeCb = Math.abs(cB) > 1e-4 ? cB : cB >= 0 ? 1e-4 : -1e-4
-    const jac = (la * cTh) / (ls * safeCb)
-    const jacDot =
-      (-la * sTh * thdV * (ls * safeCb) + la * cTh * (ls * Math.sin(bV) * bdV)) /
-      (ls * ls * safeCb * safeCb)
     const mEffC = m11 + 2 * jac * m12 + jac * jac * m22
     const thddC = (rhs1 + jac * rhs2 - (m12 + jac * m22) * jacDot * thdV) / mEffC
     const bddC = jac * thddC + jacDot * thdV
-    return { dth: thdV, db: bdV, dthd: thddC, dbd: bddC, pFric, freeAz }
+    return { dth: thdV, db: bdV, dthd: thddC, dbd: bddC, pFric, freeAz, tauHold }
   }
 
   const maxSteps = Math.ceil(1.0 / dtS) + 2
@@ -1660,6 +1788,12 @@ function solveTrebuchetLaunch(
     const fricPrev = frictionLossJ
 
     const k1 = evalRhs(th, thd, beta, betad, inTrough)
+    if (step === 0 && Math.abs(thd) < 1e-9 && k1.dthd <= 0) {
+      thd = 0
+      betad = 0
+      leftCradle = false
+      break
+    }
     if (inTrough && k1.freeAz > 0) {
       inTrough = false
     }
@@ -1702,6 +1836,32 @@ function solveTrebuchetLaunch(
       betad = Math.abs(cB) > 1e-4 ? ((la * Math.cos(th)) / (ls * cB)) * thd : 0
     }
 
+    if ((thdPrev > 0 && thd <= 0) || (thdPrev < 0 && thd >= 0)) {
+      const a = thdPrev / (thdPrev - thd)
+      const thZ = thPrev + a * (th - thPrev)
+      const bZ = bPrev + a * (beta - bPrev)
+      const bdZ = bdPrev + a * (betad - bdPrev)
+      const rZ = evalRhs(thZ, 0, bZ, bdZ, inTrough)
+      if (Math.abs(rZ.tauHold) <= tauBearing) {
+        th = thZ
+        thd = 0
+        beta = bZ
+        betad = inTrough ? 0 : bdZ
+        t = tPrev + a * (t - tPrev)
+        frictionLossJ = fricPrev + a * (frictionLossJ - fricPrev)
+        leftCradle = false
+        if (t > samples[samples.length - 1].t + 1e-12) {
+          samples.push({
+            t,
+            psiDeg: beta * RAD_TO_DEG,
+            thDeg: th * RAD_TO_DEG,
+            omegaArm: 0,
+          })
+        }
+        break
+      }
+    }
+
     const leadPrev = (bPrev - thPrev) * RAD_TO_DEG - 180
     const leadNow = (beta - th) * RAD_TO_DEG - 180
     const vxNow = la * Math.sin(th) * thd - ls * Math.sin(beta) * betad
@@ -1737,8 +1897,11 @@ function solveTrebuchetLaunch(
 
   const xSag = -la * Math.cos(th) + ls * Math.cos(beta)
   const zSag = Math.max(0, cfg.pivotHeightM + la * Math.sin(th) - ls * Math.sin(beta))
-  const vxSag = leftCradle ? la * Math.sin(th) * thd - ls * Math.sin(beta) * betad : 0
-  const vzSag = leftCradle ? la * Math.cos(th) * thd - ls * Math.cos(beta) * betad : 0
+  const vxPouchSag = la * Math.sin(th) * thd - ls * Math.sin(beta) * betad
+  const vzPouchSag = la * Math.cos(th) * thd - ls * Math.cos(beta) * betad
+  const vPouchSq = vxPouchSag * vxPouchSag + vzPouchSag * vzPouchSag
+  const vxSag = leftCradle ? vxPouchSag : 0
+  const vzSag = leftCradle ? vzPouchSag : 0
 
   const cwActive = th < Math.PI * 0.5
   const kcEnd = cwActive ? cfg.kCwM * Math.cos(th) : 0
@@ -1747,11 +1910,11 @@ function solveTrebuchetLaunch(
     : cfg.dropHeightM
 
   const velMps = rotateSagittalToWorld(vxSag, vzSag, yawRad)
-  const keTransBallJ = 0.5 * mBall * (vxSag * vxSag + vzSag * vzSag)
+  const keTransBallJ = leftCradle ? 0.5 * mBall * vPouchSq : 0
   const keArmBailCwPouchJ =
     0.5 * iArm * thd * thd +
     0.5 * mCw * (kcEnd * thd) * (kcEnd * thd) +
-    0.5 * mPouch * (vxSag * vxSag + vzSag * vzSag)
+    0.5 * (mPouch + (leftCradle ? 0 : mBall)) * vPouchSq
   const peBallArmEnd =
     mEff * g * (cfg.pivotHeightM + la * Math.sin(th) - ls * Math.sin(beta)) +
     mArm * g * (cfg.pivotHeightM + cgArm * Math.sin(th))

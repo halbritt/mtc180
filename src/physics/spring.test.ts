@@ -154,4 +154,14 @@ describe('spring mechanics (Test 1: Spring Work Integration)', () => {
     expect(springPotentialEnergy(spec, 7.0)).toBe(0)
     expect(springPotentialEnergy(spec, 171.0)).toBeGreaterThan(1.9)
   })
+
+  it('matches integrateSpringWork when theta + springZeroOffsetDeg < 0 (Fix #6)', () => {
+    const analyticNeg = springWork(180, 0, 2.12, 1, -10)
+    const numericNeg = integrateSpringWork(180, 0, 2.12, 1, 1000, -10)
+    expect(Math.abs(analyticNeg - numericNeg)).toBeLessThan(1e-6)
+
+    const analyticCrossZero = springWork(10, -10, 2.12, 0.5, 0)
+    const numericCrossZero = integrateSpringWork(10, -10, 2.12, 0.5, 1000, 0)
+    expect(Math.abs(analyticCrossZero - numericCrossZero)).toBeLessThan(1e-6)
+  })
 })

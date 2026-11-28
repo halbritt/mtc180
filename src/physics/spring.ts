@@ -81,13 +81,22 @@ export function springWork(
   if (totalEnergyJ === 0 || thFromDeg === thToDeg) return 0
 
   const sign = thFromDeg >= thToDeg ? 1 : -1
-  const hiEff = Math.max(0, Math.max(thFromDeg, thToDeg) + springZeroOffsetDeg)
-  const loEff = Math.max(0, Math.min(thFromDeg, thToDeg) + springZeroOffsetDeg)
-  if (hiEff <= loEff) return 0
+  const loRaw = Math.min(thFromDeg, thToDeg) + springZeroOffsetDeg
+  const hiRaw = Math.max(thFromDeg, thToDeg) + springZeroOffsetDeg
 
-  const tauHi = springTorque(hiEff, totalEnergyJ, torqueRatio, 0)
-  const tauLo = springTorque(loEff, totalEnergyJ, torqueRatio, 0)
-  return sign * 0.5 * (tauHi + tauLo) * ((hiEff - loEff) * DEG_TO_RAD)
+  let work = 0
+  if (loRaw < 0) {
+    const negSpanDeg = Math.min(hiRaw, 0) - loRaw
+    const tauRest = springTorque(0, totalEnergyJ, torqueRatio, 0)
+    work += tauRest * (negSpanDeg * DEG_TO_RAD)
+  }
+  if (hiRaw > 0) {
+    const loPos = Math.max(0, loRaw)
+    const tauHi = springTorque(hiRaw, totalEnergyJ, torqueRatio, 0)
+    const tauLo = springTorque(loPos, totalEnergyJ, torqueRatio, 0)
+    work += 0.5 * (tauHi + tauLo) * ((hiRaw - loPos) * DEG_TO_RAD)
+  }
+  return sign * work
 }
 
 /**
