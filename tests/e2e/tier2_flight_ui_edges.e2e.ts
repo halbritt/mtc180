@@ -533,7 +533,16 @@ describe('Tier 2 — F12 Edges: Three.js Scene & Fallback Boundaries (Chromium C
           await app.waitForFunction(`document.querySelector('#source')?.textContent?.trim() === ${JSON.stringify(name)}`, 5000)
           for (const preset of ['orbit', 'side', 'overhead', 'downrange']) {
             await app.selectOption('#camera', preset)
-            await new Promise((r) => setTimeout(r, 80))
+            await app.evalExpr(
+              `return await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`
+            )
+            await app.waitForFunction(
+              `Array.from(document.querySelectorAll('#field .field-label span')).some((el) => {
+                const r = el.getBoundingClientRect();
+                return getComputedStyle(el).visibility === 'visible' && r.width > 0 && r.height > 0;
+              })`,
+              5_000
+            )
           }
         })
       }
@@ -642,7 +651,10 @@ describe('Tier 2 — F13 Edges: Telemetry & Auto-Sight Boundaries', () => {
         return true;
       `)
       expect(triggered).toBe(true)
-      await new Promise((r) => setTimeout(r, 120))
+      await app.waitForFunction(
+        `/unreachable|out of range|cannot reach/i.test(document.querySelector(${JSON.stringify(M4_SELECTORS.autosightStatus)})?.textContent || '')`,
+        5_000
+      )
       const warnText = await app.evalExpr<string>(`
         const w = document.querySelector(${JSON.stringify(M4_SELECTORS.autosightStatus)});
         return w ? (w.textContent || '') : '';

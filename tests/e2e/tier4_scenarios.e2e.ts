@@ -430,13 +430,26 @@ describe('Tier 4 — Real-World Competition Scenarios (T4-01..T4-10)', () => {
 
       await app.waitForFunction(`!document.querySelector('#replay').hidden`, 10_000)
       await app.selectOption('#replay-speed', '0.5')
+      const beforeReplayClock = await app.getText('#replay-clock')
       await app.click('#replay-play')
-      await new Promise((r) => setTimeout(r, 120))
+      await app.waitForFunction(
+        `(document.querySelector('#replay-clock')?.textContent || '').trim() !== ${JSON.stringify(beforeReplayClock)}`,
+        5_000
+      )
 
       // 4. Switch camera through all 4 presets
       for (const preset of ['orbit', 'side', 'overhead', 'downrange']) {
         await app.selectOption('#camera', preset)
-        await new Promise((r) => setTimeout(r, 80))
+        await app.evalExpr(
+          `return await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`
+        )
+        await app.waitForFunction(
+          `Array.from(document.querySelectorAll('#field .field-label span')).some((el) => {
+            const r = el.getBoundingClientRect();
+            return getComputedStyle(el).visibility === 'visible' && r.width > 0 && r.height > 0;
+          })`,
+          5_000
+        )
       }
 
       // 5. Run N=500 Monte Carlo Shootout in Overhead map mode

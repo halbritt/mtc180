@@ -606,10 +606,12 @@ describe('Tier 1 — F12: Three.js Parametric Launcher & Field (Chromium CDP)', 
       const beforeFrame = await app.evalExpr<{ hash: number; distinctColors: number }>(sampleCanvasExpr)
 
       await app.waitForFunction(
-        `(document.querySelector('#replay-clock')?.textContent || '').trim() !== ${JSON.stringify(beforeClock)}`,
+        `(document.querySelector('#replay-clock')?.textContent || '').trim() !== ${JSON.stringify(beforeClock)} && (document.querySelector('#field .field-ball')?.style.transform || '') !== ${JSON.stringify(beforeBall)}`,
         5_000
       )
-      await new Promise((r) => setTimeout(r, 80))
+      await app.evalExpr(
+        `return await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`
+      )
       const afterClock = await app.getText('#replay-clock')
       const afterBall = await app.evalExpr<string>(
         `return document.querySelector('#field .field-ball')?.style.transform || '';`
@@ -646,7 +648,13 @@ describe('Tier 1 — F12: Three.js Parametric Launcher & Field (Chromium CDP)', 
 
   it('F12-T1.4: CSS2DRenderer renders visible .field-label overlays with non-zero rects', async () => {
     await withBrowserApp(async (app) => {
-      await new Promise((r) => setTimeout(r, 120))
+      await app.waitForFunction(
+        `Array.from(document.querySelectorAll('#field .field-label span')).filter((el) => {
+          const r = el.getBoundingClientRect();
+          return getComputedStyle(el).visibility === 'visible' && r.width > 10 && r.height > 8;
+        }).length >= 4`,
+        5_000
+      )
       const visibleRects = await app.evalExpr<Array<{ text: string; w: number; h: number }>>(`
         return Array.from(document.querySelectorAll('#field .field-label span')).map((el) => {
           const r = el.getBoundingClientRect();
@@ -664,14 +672,31 @@ describe('Tier 1 — F12: Three.js Parametric Launcher & Field (Chromium CDP)', 
 
   it('F12-T1.5: switching #camera across all 4 presets updates projection without errors', async () => {
     await withBrowserApp(async (app) => {
+      await app.waitForFunction(
+        `Array.from(document.querySelectorAll('#field .field-label span')).filter((el) => {
+          const r = el.getBoundingClientRect();
+          return getComputedStyle(el).visibility === 'visible' && r.width > 10 && r.height > 8;
+        }).length >= 4`,
+        5_000
+      )
       const positions: Record<string, string> = {}
+      let firstSnapshot: string | undefined
       for (const preset of ['orbit', 'side', 'overhead', 'downrange']) {
         await app.selectOption('#camera', preset)
-        await new Promise((r) => setTimeout(r, 120))
+        if (firstSnapshot !== undefined && preset === 'side') {
+          await app.waitForFunction(
+            `Array.from(document.querySelectorAll('#field .field-label span')).map((s) => s.style.transform + ':' + getComputedStyle(s).visibility).join('|') !== ${JSON.stringify(firstSnapshot)}`,
+            5_000
+          )
+        }
+        await app.evalExpr(
+          `return await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`
+        )
         positions[preset] = await app.evalExpr<string>(`
           const labels = Array.from(document.querySelectorAll('#field .field-label span'));
           return labels.map((s) => s.style.transform + ':' + getComputedStyle(s).visibility).join('|');
         `)
+        if (firstSnapshot === undefined) firstSnapshot = positions[preset]
       }
       expect(new Set(Object.values(positions)).size).toBeGreaterThanOrEqual(3)
       expect(app.getPageErrors()).toEqual([])
@@ -681,13 +706,28 @@ describe('Tier 1 — F12: Three.js Parametric Launcher & Field (Chromium CDP)', 
 
   it('F12-T1.6: field canvas fills container and frames traces on resize without error', async () => {
     await withBrowserApp(async (app) => {
+      const beforeWidth = await app.evalExpr<number>(`
+        const c = document.querySelector('#field canvas');
+        return c ? c.getBoundingClientRect().width : 0;
+      `)
       await app.send('Emulation.setDeviceMetricsOverride', {
         width: 900,
         height: 700,
         deviceScaleFactor: 1,
         mobile: false,
       })
-      await new Promise((r) => setTimeout(r, 150))
+      await app.waitForFunction(
+        `window.innerWidth === 900 && (() => {
+          const c = document.querySelector('#field canvas');
+          if (!c) return false;
+          const r = c.getBoundingClientRect();
+          return r.width > 200 && r.width !== ${JSON.stringify(beforeWidth)};
+        })()`,
+        5_000
+      )
+      await app.evalExpr(
+        `return await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`
+      )
       const box = await app.evalExpr<{ w: number; h: number }>(`
         const c = document.querySelector('#field canvas');
         const r = c.getBoundingClientRect();
@@ -766,6 +806,9 @@ describe('Tier 1 — F13: Telemetry Overlay & Auto-Sight', () => {
 
     await withBrowserApp(async (app) => {
       const launchAndReadTotal = async () => {
+        const preText = await app.evalExpr<string>(`
+          return (document.querySelector('#metrics')?.textContent || '') + ' ' + (document.querySelector('#hud')?.textContent || '');
+        `)
         const clicked = await app.evalExpr<boolean>(`
           const btn = document.querySelector(${JSON.stringify(M4_SELECTORS.launchBtn)})
             || Array.from(document.querySelectorAll('button')).find((b) => /^\\s*(launch|fire|simulate)\\b/i.test(b.textContent || ''));
@@ -774,7 +817,12 @@ describe('Tier 1 — F13: Telemetry Overlay & Auto-Sight', () => {
           return true;
         `)
         expect(clicked).toBe(true)
-        await new Promise((r) => setTimeout(r, 100))
+        await app.waitForFunction(`
+          (() => {
+            const txt = (document.querySelector('#metrics')?.textContent || '') + ' ' + (document.querySelector('#hud')?.textContent || '');
+            return txt !== ${JSON.stringify(preText)} && /total\\s*distance[^0-9.-]*(-?\\d+(?:\\.\\d+)?)\\s*m/i.test(txt);
+          })()
+        `, 5_000)
         return app.evalExpr<string>(`
           return (document.querySelector('#metrics')?.textContent || '') + ' ' + (document.querySelector('#hud')?.textContent || '');
         `)
