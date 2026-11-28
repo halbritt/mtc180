@@ -23,6 +23,23 @@ export interface LauncherModelFilter {
   readonly equipmentBonus?: RubricComplianceMeta['equipmentBonus']
 }
 
+function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
+  if (value === null || typeof value !== 'object') {
+    return value
+  }
+  if (seen.has(value as object)) {
+    return value
+  }
+  seen.add(value as object)
+  for (const key of Reflect.ownKeys(value as object)) {
+    const prop = (value as Record<PropertyKey, unknown>)[key]
+    if (prop !== null && typeof prop === 'object') {
+      deepFreeze(prop, seen)
+    }
+  }
+  return Object.freeze(value)
+}
+
 const RAW_MODELS: readonly LauncherModel[] = [
   V51_CORD_HORN,
   DIRECT_ARM_RAIL,
@@ -35,8 +52,8 @@ const RAW_MODELS: readonly LauncherModel[] = [
   GRAVITY_SLING_TREBUCHET,
 ]
 
-export const LAUNCHER_MODELS: readonly LauncherModel[] = RAW_MODELS.map((model) =>
-  validateLauncherModel(model)
+export const LAUNCHER_MODELS: readonly LauncherModel[] = deepFreeze(
+  RAW_MODELS.map((model) => deepFreeze(validateLauncherModel(model)))
 )
 
 const byIdRecord: Record<string, LauncherModel> = {}
@@ -48,7 +65,7 @@ for (const model of LAUNCHER_MODELS) {
 }
 
 export const LAUNCHER_MODELS_BY_ID: Readonly<Record<string, LauncherModel>> =
-  byIdRecord
+  deepFreeze(byIdRecord)
 
 export function getLauncherModel(id: string): LauncherModel {
   if (typeof id !== 'string' || !Object.hasOwn(LAUNCHER_MODELS_BY_ID, id)) {

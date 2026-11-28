@@ -57,7 +57,7 @@ export const DIRECT_ARM_RAIL: LauncherModel = {
     torqueRatio: 0.5,
     thCockMaxDeg: 173.0,
     thRestDeg: 14.0,
-    springZeroOffsetDeg: 7.0,
+    springZeroOffsetDeg: 0.0,
     bailInertiaKgM2: 0.59e-4,
     bailMassXKgM: 9.87e-4,
     hingePosMm: [0.0, 29.5],

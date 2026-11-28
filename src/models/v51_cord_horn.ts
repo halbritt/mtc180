@@ -4,6 +4,8 @@ import {
   type LauncherModel,
 } from './types'
 
+export const V51_TH_COCK_FULL_DEG = 171.0
+
 export const V51_NOTCH_PSIS_DEG = [
   34.5, 25.5, 16.5, 7.8, -0.2, -8.2,
 ] as const
@@ -75,6 +77,7 @@ export const V51_CORD_HORN: LauncherModel = {
     stopAnglesDeg: [42, 50, 58],
     stopHolesMm: V51_STOP_HOLES_MM,
     cordTieNotchIndex: 5,
+    cordTieThCockDeg: V51_TH_COCK_FULL_DEG,
   },
   adjustments: [
     {

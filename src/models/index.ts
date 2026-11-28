@@ -32,6 +32,7 @@ export {
   V51_CORD_HORN,
   V51_NOTCH_PSIS_DEG,
   V51_STOP_HOLES_MM,
+  V51_TH_COCK_FULL_DEG,
 } from './v51_cord_horn'
 export {
   V50_CIRCULAR_CAM,

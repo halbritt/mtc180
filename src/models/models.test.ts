@@ -21,6 +21,7 @@ import {
   V41_TILTED_CRADLE,
   V50_CIRCULAR_CAM,
   V51_CORD_HORN,
+  V51_TH_COCK_FULL_DEG,
   validateAndClampAdjustments,
   validateLauncherModel,
   type CradleType,
@@ -112,6 +113,8 @@ describe('exact CAD & Python constant parity', () => {
     if (V51_CORD_HORN.linkage.kind === 'cord_horn') {
       expect(V51_CORD_HORN.linkage.hornADeg).toBe(39.0)
       expect(V51_CORD_HORN.linkage.hornRMm).toBe(108.0)
+      expect(V51_TH_COCK_FULL_DEG).toBe(171.0)
+      expect(V51_CORD_HORN.linkage.cordTieThCockDeg).toBe(171.0)
       expect(V51_CORD_HORN.linkage.rollerPosMm).toEqual([48.0, 43.0])
       expect(V51_CORD_HORN.linkage.rRollEffMm).toBe(6.85)
       expect(V51_CORD_HORN.linkage.notchPsisDeg).toEqual([
@@ -179,7 +182,13 @@ describe('exact CAD & Python constant parity', () => {
     expect(DIRECT_ARM_RAIL.trapBank.bailMassXKgM).toBe(9.87e-4)
     expect(DIRECT_ARM_RAIL.trapBank.thCockMaxDeg).toBe(173.0)
     expect(DIRECT_ARM_RAIL.trapBank.thRestDeg).toBe(14.0)
-    expect(DIRECT_ARM_RAIL.trapBank.springZeroOffsetDeg).toBe(7.0)
+    expect(DIRECT_ARM_RAIL.trapBank.springZeroOffsetDeg).toBe(0.0)
+    expect(DIRECT_ARM_1TRAP.trapBank.springZeroOffsetDeg).toBe(0.0)
+    expect(DIRECT_ARM_2TRAP.trapBank.springZeroOffsetDeg).toBe(0.0)
+    expect(DIRECT_CUP_2TRAP.trapBank.springZeroOffsetDeg).toBe(0.0)
+    expect(V51_CORD_HORN.trapBank.springZeroOffsetDeg).toBe(0.0)
+    expect(V50_CIRCULAR_CAM.trapBank.springZeroOffsetDeg).toBe(0.0)
+    expect(FLOOR_FLUSH_INCLINED_RAMP.trapBank.springZeroOffsetDeg).toBe(0.0)
     expect(DIRECT_ARM_RAIL_GEOMETRY.rideHMm).toBeCloseTo(
       Math.sqrt(21.335 * 21.335 - 7.44 * 7.44),
       6
@@ -337,6 +346,119 @@ describe('validateLauncherModel error rejection', () => {
     }
     expect(() => validateLauncherModel(badDiscreteDefault)).toThrow(RangeError)
   })
+
+  it('enforces parallel-axis inertia lower bound, finite linkage arrays, ramp defaults, cordTieThCockDeg bounds, adjustment linkage cross-checks, and golf ball bonus rule', () => {
+    const badParallelAxis: LauncherModel = {
+      ...V51_CORD_HORN,
+      arm: {
+        ...V51_CORD_HORN.arm,
+        massKg: 10,
+        cgArmMm: [150, 0],
+        inertiaKgM2: 1e-6,
+      },
+    }
+    expect(() => validateLauncherModel(badParallelAxis)).toThrow(RangeError)
+
+    if (V51_CORD_HORN.linkage.kind === 'cord_horn') {
+      const nanNotch: LauncherModel = {
+        ...V51_CORD_HORN,
+        linkage: {
+          ...V51_CORD_HORN.linkage,
+          notchPsisDeg: [34.5, Number.NaN, 16.5, 7.8, -0.2, -8.2],
+        },
+      }
+      expect(() => validateLauncherModel(nanNotch)).toThrow(RangeError)
+
+      const nanStopHole: LauncherModel = {
+        ...V51_CORD_HORN,
+        linkage: {
+          ...V51_CORD_HORN.linkage,
+          stopHolesMm: {
+            ...V51_CORD_HORN.linkage.stopHolesMm,
+            42: [Number.NaN, 134.1],
+          },
+        },
+      }
+      expect(() => validateLauncherModel(nanStopHole)).toThrow(RangeError)
+
+      const cordTieTooHigh: LauncherModel = {
+        ...V51_CORD_HORN,
+        linkage: {
+          ...V51_CORD_HORN.linkage,
+          cordTieThCockDeg: 174.0,
+        },
+      }
+      expect(() => validateLauncherModel(cordTieTooHigh)).toThrow(RangeError)
+
+      const cordTieTooLow: LauncherModel = {
+        ...V51_CORD_HORN,
+        linkage: {
+          ...V51_CORD_HORN.linkage,
+          cordTieThCockDeg: 7.0,
+        },
+      }
+      expect(() => validateLauncherModel(cordTieTooLow)).toThrow(RangeError)
+
+      const badLaunchOpt: LauncherModel = {
+        ...V51_CORD_HORN,
+        adjustments: [
+          V51_CORD_HORN.adjustments[0],
+          {
+            ...V51_CORD_HORN.adjustments[1],
+            options: [42, 46, 58],
+            defaultValue: 42,
+          },
+          ...V51_CORD_HORN.adjustments.slice(2),
+        ],
+      }
+      expect(() => validateLauncherModel(badLaunchOpt)).toThrow(RangeError)
+
+      const badNotchOpt: LauncherModel = {
+        ...V51_CORD_HORN,
+        adjustments: [
+          {
+            ...V51_CORD_HORN.adjustments[0],
+            options: [1, 2, 3, 4, 5, 7],
+            max: 7,
+            defaultValue: 1,
+          },
+          ...V51_CORD_HORN.adjustments.slice(1),
+        ],
+      }
+      expect(() => validateLauncherModel(badNotchOpt)).toThrow(RangeError)
+    }
+
+    if (V50_CIRCULAR_CAM.linkage.kind === 'circular_cam') {
+      const badCamTie: LauncherModel = {
+        ...V50_CIRCULAR_CAM,
+        linkage: {
+          ...V50_CIRCULAR_CAM.linkage,
+          cordTieThCockDeg: 180.0,
+        },
+      }
+      expect(() => validateLauncherModel(badCamTie)).toThrow(RangeError)
+    }
+
+    if (FLOOR_FLUSH_INCLINED_RAMP.linkage.kind === 'inclined_ramp') {
+      const badRampDefault: LauncherModel = {
+        ...FLOOR_FLUSH_INCLINED_RAMP,
+        linkage: {
+          ...FLOOR_FLUSH_INCLINED_RAMP.linkage,
+          defaultRampAngleDeg: 90,
+        },
+      }
+      expect(() => validateLauncherModel(badRampDefault)).toThrow(RangeError)
+    }
+
+    const fakeBallBonus: LauncherModel = {
+      ...V51_CORD_HORN,
+      projectile: {
+        ...V51_CORD_HORN.projectile,
+        isRealGolfBall: false,
+      },
+    }
+    expect(() => validateLauncherModel(fakeBallBonus)).toThrow(RangeError)
+  })
 })
 
 describe('validateAndClampAdjustments', () => {
@@ -409,6 +531,77 @@ describe('validateAndClampAdjustments', () => {
         yawDeg: Number.POSITIVE_INFINITY,
       })
     ).toThrow(RangeError)
+  })
+
+  it('snaps micro-steps < 1e-10 cleanly inside [min, max]', () => {
+    const microModel: LauncherModel = {
+      ...DIRECT_ARM_RAIL,
+      adjustments: [
+        {
+          id: 'micro',
+          label: 'Micro Adjustment',
+          unit: 'm',
+          kind: 'continuous',
+          min: 1e-11,
+          max: 2e-11,
+          step: 1e-12,
+          defaultValue: 1.5e-11,
+        },
+      ],
+    }
+    const snapped = validateAndClampAdjustments(microModel, {
+      micro: 1.54e-11,
+    })
+    expect(snapped.micro).toBeGreaterThanOrEqual(1e-11)
+    expect(snapped.micro).toBeLessThanOrEqual(2e-11)
+    expect(snapped.micro).toBeCloseTo(1.5e-11, 22)
+  })
+})
+
+describe('registry immutability', () => {
+  it('deep-freezes LAUNCHER_MODELS, LAUNCHER_MODELS_BY_ID, and all nested model properties', () => {
+    expect(Object.isFrozen(LAUNCHER_MODELS)).toBe(true)
+    expect(Object.isFrozen(LAUNCHER_MODELS_BY_ID)).toBe(true)
+
+    for (const model of LAUNCHER_MODELS) {
+      const fetched = getLauncherModel(model.id)
+      expect(Object.isFrozen(fetched)).toBe(true)
+      expect(Object.isFrozen(fetched.projectile)).toBe(true)
+      expect(Object.isFrozen(fetched.rubricCompliance)).toBe(true)
+      expect(Object.isFrozen(fetched.rubricCompliance.baseDimensionsMm)).toBe(
+        true
+      )
+      expect(Object.isFrozen(fetched.trapBank)).toBe(true)
+      expect(Object.isFrozen(fetched.arm)).toBe(true)
+      expect(Object.isFrozen(fetched.arm.cgArmMm)).toBe(true)
+      expect(Object.isFrozen(fetched.cradle)).toBe(true)
+      if (fetched.cradle.railGeometry) {
+        expect(Object.isFrozen(fetched.cradle.railGeometry)).toBe(true)
+      }
+      expect(Object.isFrozen(fetched.linkage)).toBe(true)
+      if (
+        fetched.linkage.kind === 'cord_horn' ||
+        fetched.linkage.kind === 'circular_cam'
+      ) {
+        expect(Object.isFrozen(fetched.linkage.notchPsisDeg)).toBe(true)
+        expect(Object.isFrozen(fetched.linkage.stopAnglesDeg)).toBe(true)
+        expect(Object.isFrozen(fetched.linkage.stopHolesMm)).toBe(true)
+        for (const deg of fetched.linkage.stopAnglesDeg) {
+          expect(Object.isFrozen(fetched.linkage.stopHolesMm[deg])).toBe(true)
+        }
+      }
+      expect(Object.isFrozen(fetched.adjustments)).toBe(true)
+      for (const adj of fetched.adjustments) {
+        expect(Object.isFrozen(adj)).toBe(true)
+        if (adj.options) expect(Object.isFrozen(adj.options)).toBe(true)
+        if (adj.optionLabels) expect(Object.isFrozen(adj.optionLabels)).toBe(true)
+      }
+    }
+
+    expect(() => {
+      ;(getLauncherModel('v51_cord_horn').arm as { massKg: number }).massKg =
+        -999
+    }).toThrow(TypeError)
   })
 })
 

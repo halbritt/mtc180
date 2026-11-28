@@ -199,6 +199,14 @@ export function validateLauncherModel(model: LauncherModel): LauncherModel {
     )
   }
   if (
+    (rc.equipmentBonus === 'ball' || rc.equipmentBonus === 'both') &&
+    !model.projectile.isRealGolfBall
+  ) {
+    throw new RangeError(
+      `${id}: equipmentBonus "${rc.equipmentBonus}" requires projectile.isRealGolfBall === true.`
+    )
+  }
+  if (
     rc.baseFits2ft &&
     (baseL > LAUNCH_SITE_2FT_MM ||
       baseW > LAUNCH_SITE_2FT_MM ||
@@ -280,6 +288,13 @@ export function validateLauncherModel(model: LauncherModel): LauncherModel {
   assertPositive(model.arm.massKg, `${id}.arm.massKg`)
   assertPositive(model.arm.inertiaKgM2, `${id}.arm.inertiaKgM2`)
   assertFinitePair(model.arm.cgArmMm, `${id}.arm.cgArmMm`)
+  const rCgM = Math.hypot(model.arm.cgArmMm[0], model.arm.cgArmMm[1]) * 1e-3
+  const minInertiaKgM2 = model.arm.massKg * rCgM * rCgM
+  if (model.arm.inertiaKgM2 + 1e-12 < minInertiaKgM2) {
+    throw new RangeError(
+      `${id}.arm.inertiaKgM2 (${model.arm.inertiaKgM2}) violates parallel-axis lower bound m*r_cg^2 (${minInertiaKgM2}).`
+    )
+  }
   assertPositive(model.arm.lengthBallM, `${id}.arm.lengthBallM`)
   assertFinitePair(model.arm.ballOffsetArmMm, `${id}.arm.ballOffsetArmMm`)
   assertFinitePair(model.arm.pivotPosMm, `${id}.arm.pivotPosMm`)
@@ -305,14 +320,30 @@ export function validateLauncherModel(model: LauncherModel): LauncherModel {
       assertPositive(lk.rRollEffMm, `${id}.linkage.rRollEffMm`)
       assertPositive(lk.hornRMm, `${id}.linkage.hornRMm`)
       assertFinite(lk.hornADeg, `${id}.linkage.hornADeg`)
+      assertFinite(lk.cordTieThCockDeg, `${id}.linkage.cordTieThCockDeg`)
+      if (
+        lk.cordTieThCockDeg <= tb.thRestDeg ||
+        lk.cordTieThCockDeg > tb.thCockMaxDeg
+      ) {
+        throw new RangeError(
+          `${id}.linkage.cordTieThCockDeg (${lk.cordTieThCockDeg}) must lie in (thRestDeg=${tb.thRestDeg}, thCockMaxDeg=${tb.thCockMaxDeg}].`
+        )
+      }
       if (lk.notchPsisDeg.length === 0 || lk.stopAnglesDeg.length === 0) {
         throw new RangeError(`${id}.linkage requires non-empty notches and stops.`)
       }
-      for (const deg of lk.stopAnglesDeg) {
+      lk.notchPsisDeg.forEach((psi, i) =>
+        assertFinite(psi, `${id}.linkage.notchPsisDeg[${i}]`)
+      )
+      for (const [degKey, coords] of Object.entries(lk.stopHolesMm)) {
+        assertFinitePair(coords, `${id}.linkage.stopHolesMm[${degKey}]`)
+      }
+      lk.stopAnglesDeg.forEach((deg, i) => {
+        assertFinite(deg, `${id}.linkage.stopAnglesDeg[${i}]`)
         if (!Object.hasOwn(lk.stopHolesMm, deg)) {
           throw new Error(`${id}.linkage.stopHolesMm missing stop ${deg}.`)
         }
-      }
+      })
       if (
         !Number.isSafeInteger(lk.cordTieNotchIndex) ||
         lk.cordTieNotchIndex < 0 ||
@@ -329,14 +360,29 @@ export function validateLauncherModel(model: LauncherModel): LauncherModel {
       assertPositive(lk.rCamEffMm, `${id}.linkage.rCamEffMm`)
       assertFinite(lk.camKnotDeg, `${id}.linkage.camKnotDeg`)
       assertFinite(lk.cordTieThCockDeg, `${id}.linkage.cordTieThCockDeg`)
+      if (
+        lk.cordTieThCockDeg <= tb.thRestDeg ||
+        lk.cordTieThCockDeg > tb.thCockMaxDeg
+      ) {
+        throw new RangeError(
+          `${id}.linkage.cordTieThCockDeg (${lk.cordTieThCockDeg}) must lie in (thRestDeg=${tb.thRestDeg}, thCockMaxDeg=${tb.thCockMaxDeg}].`
+        )
+      }
       if (lk.notchPsisDeg.length === 0 || lk.stopAnglesDeg.length === 0) {
         throw new RangeError(`${id}.linkage requires non-empty notches and stops.`)
       }
-      for (const deg of lk.stopAnglesDeg) {
+      lk.notchPsisDeg.forEach((psi, i) =>
+        assertFinite(psi, `${id}.linkage.notchPsisDeg[${i}]`)
+      )
+      for (const [degKey, coords] of Object.entries(lk.stopHolesMm)) {
+        assertFinitePair(coords, `${id}.linkage.stopHolesMm[${degKey}]`)
+      }
+      lk.stopAnglesDeg.forEach((deg, i) => {
+        assertFinite(deg, `${id}.linkage.stopAnglesDeg[${i}]`)
         if (!Object.hasOwn(lk.stopHolesMm, deg)) {
           throw new Error(`${id}.linkage.stopHolesMm missing stop ${deg}.`)
         }
-      }
+      })
       break
     case 'direct_rail':
       assertFinite(lk.thStopDeg, `${id}.linkage.thStopDeg`)
@@ -364,6 +410,14 @@ export function validateLauncherModel(model: LauncherModel): LauncherModel {
         throw new RangeError(`${id}.linkage.rampAngleRangeDeg invalid range.`)
       }
       assertFinite(lk.defaultRampAngleDeg, `${id}.linkage.defaultRampAngleDeg`)
+      if (
+        lk.defaultRampAngleDeg < lk.rampAngleRangeDeg[0] ||
+        lk.defaultRampAngleDeg > lk.rampAngleRangeDeg[1]
+      ) {
+        throw new RangeError(
+          `${id}.linkage.defaultRampAngleDeg must lie within rampAngleRangeDeg [${lk.rampAngleRangeDeg[0]}, ${lk.rampAngleRangeDeg[1]}].`
+        )
+      }
       assertFinitePair(lk.cockAngleRangeDeg, `${id}.linkage.cockAngleRangeDeg`)
       if (lk.cockAngleRangeDeg[0] >= lk.cockAngleRangeDeg[1]) {
         throw new RangeError(`${id}.linkage.cockAngleRangeDeg invalid range.`)
@@ -395,6 +449,33 @@ export function validateLauncherModel(model: LauncherModel): LauncherModel {
       throw new Error(`${id}: duplicate adjustment id "${adj.id}".`)
     }
     seenIds.add(adj.id)
+  }
+
+  if (lk.kind === 'cord_horn' || lk.kind === 'circular_cam') {
+    for (const adj of model.adjustments) {
+      if (adj.id === 'launchDeg' && adj.options) {
+        for (const opt of adj.options) {
+          if (!lk.stopAnglesDeg.includes(opt)) {
+            throw new RangeError(
+              `${id}.adjustments[launchDeg].options value ${opt} is not in linkage.stopAnglesDeg.`
+            )
+          }
+        }
+      }
+      if (adj.id === 'notch' && adj.options) {
+        for (const opt of adj.options) {
+          if (
+            !Number.isSafeInteger(opt) ||
+            opt < 1 ||
+            opt > lk.notchPsisDeg.length
+          ) {
+            throw new RangeError(
+              `${id}.adjustments[notch].options value ${opt} must be in 1..${lk.notchPsisDeg.length}.`
+            )
+          }
+        }
+      }
+    }
   }
 
   // Timing & tolerances
@@ -455,8 +536,17 @@ function snapToAdjustment(adj: AdjustmentDef, value: number): number {
   }
   const clamped = Math.min(adj.max, Math.max(adj.min, value))
   const steps = Math.round((clamped - adj.min) / adj.step)
-  const snapped = Math.min(adj.max, Math.max(adj.min, adj.min + steps * adj.step))
-  return Number(snapped.toFixed(10))
+  let snapped = adj.min + steps * adj.step
+  if (Math.abs(snapped) <= adj.step * 1e-10) {
+    snapped = 0
+  } else {
+    const magExp = Math.floor(Math.log10(Math.abs(snapped)))
+    const stepExp = Math.floor(Math.log10(adj.step))
+    const sigDigits = Math.min(14, Math.max(1, magExp - stepExp + 10))
+    snapped = Number(snapped.toPrecision(sigDigits))
+  }
+  const bounded = Math.min(adj.max, Math.max(adj.min, snapped))
+  return bounded === 0 ? 0 : bounded
 }
 
 export function validateAndClampAdjustments(

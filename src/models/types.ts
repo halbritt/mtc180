@@ -60,6 +60,14 @@ export interface TrapBankConfig {
   readonly torqueRatio: number
   readonly thCockMaxDeg: number
   readonly thRestDeg: number
+  /**
+   * Angle offset (deg) added to `theta` before evaluating linear torsion torque
+   * `tau(theta_eff) = tc * (torqueRatio + (1 - torqueRatio) * theta_eff / 180)`
+   * against `[0°, 180°]`, where `theta_eff = 0°` gives `tc * torqueRatio` and
+   * `theta_eff = 180°` gives `tc`. Standard traps mounted flat with `theta`
+   * measured from the trap base (e.g. `direct_arm_sim.py` and `cam_launch_sim.py`)
+   * use `0.0`.
+   */
   readonly springZeroOffsetDeg: number
   readonly bailInertiaKgM2: number
   readonly bailMassXKgM: number
@@ -123,6 +131,7 @@ export type LinkageConfig =
       readonly stopAnglesDeg: readonly number[]
       readonly stopHolesMm: Readonly<Record<number, readonly [number, number]>>
       readonly cordTieNotchIndex: number
+      readonly cordTieThCockDeg: number
     }
   | {
       readonly kind: 'circular_cam'
