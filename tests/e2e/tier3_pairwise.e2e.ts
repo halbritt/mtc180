@@ -381,16 +381,43 @@ describe('Tier 3 — Cross-Feature Pairwise Interactions (T3-01 .. T3-18)', () =
     await withBrowserApp(async (app) => {
       expect(await app.exists(M4_SELECTORS.autosightTarget)).toBe(true)
       expect(await app.exists(M4_SELECTORS.autosightBtn)).toBe(true)
+      expect(await app.exists(M4_SELECTORS.launchBtn)).toBe(true)
+
+      const preTotalBtnVal = await app.evalExpr<string>(
+        'return document.querySelector("#score-use-total")?.value || ""'
+      )
       await app.setInput(M4_SELECTORS.autosightTarget, '4.80')
       await app.click(M4_SELECTORS.autosightBtn)
       await app.waitForFunction(
-        '(() => { const b = document.querySelector("#score-use-total"); return Boolean(b && !b.disabled); })()',
+        `/Calibrated/i.test(document.querySelector(${JSON.stringify(M4_SELECTORS.autosightStatus)})?.textContent || '')`,
         10_000
       )
+
+      await app.click(M4_SELECTORS.launchBtn)
+      await app.waitForFunction(
+        `(() => {
+          const carry = document.querySelector("#score-use-carry");
+          const total = document.querySelector("#score-use-total");
+          return Boolean(carry && !carry.disabled && total && !total.disabled && total.value !== ${JSON.stringify(preTotalBtnVal)});
+        })()`,
+        10_000
+      )
+
+      expect((await app.getText('#competition-points')).trim()).toBe('Pending')
+
+      await app.click('#score-use-carry')
+      const carryPts = (await app.getText('#competition-points')).trim()
+      expect(carryPts).toMatch(/^\d+\s*\/\s*10 assessed · 20 possible$/)
+
       await app.click('#score-use-total')
-      const compPts = await app.getText('#competition-points')
-      expect(compPts).toMatch(/\d+\s*\/\s*20/)
-      expect(compPts.trim()).not.toBe('0 / 20')
+      const totalPartialPts = (await app.getText('#competition-points')).trim()
+      expect(totalPartialPts).toMatch(/^[1-9]\d*\s*\/\s*10 assessed · 20 possible$/)
+
+      await app.selectOption('#grading select[name="hit1"]', 'hit')
+      await app.selectOption('#grading select[name="hit2"]', 'miss')
+      const completePts = (await app.getText('#competition-points')).trim()
+      expect(completePts).toMatch(/^\d+\s*\/\s*20$/)
+      expect(completePts).not.toBe('0 / 20')
     })
   })
 
