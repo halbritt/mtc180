@@ -348,3 +348,234 @@ a {
     padding: .35rem .25rem;
   }
 }
+
+#simulator-controls {
+  margin-bottom: 1.5rem;
+}
+.sim-panel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+.sim-card {
+  background: #fffef8;
+  border: 1px solid #c9cec4;
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+}
+.sim-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+.muted-note {
+  margin: 0.25rem 0 0.7rem;
+  font-size: 0.76rem;
+  color: #455952;
+  line-height: 1.45;
+}
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+}
+.inline-field input,
+.env-grid input,
+.env-grid select,
+.shootout-config input,
+.shootout-config select {
+  padding: 0.38rem 0.45rem;
+  border: 1px solid #acb7aa;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.78rem;
+  background: #f6f5ed;
+  color: inherit;
+}
+.inline-field input {
+  width: 5.5rem;
+}
+.model-controls {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+}
+.dof-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(150px, 1.4fr);
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.78rem;
+}
+.dof-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.dof-slider-wrap input[type='range'] {
+  flex: 1;
+  accent-color: #234b40;
+}
+.dof-readout {
+  min-width: 4.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.autosight-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.autosight-bar button,
+.shootout-actions button {
+  padding: 0.5rem 0.85rem;
+  border: 1px solid #234b40;
+  border-radius: 5px;
+  background: #f6f5ed;
+  color: #192e29;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.autosight-bar .primary-btn,
+.shootout-actions .primary-btn {
+  background: #234b40;
+  color: white;
+}
+.autosight-bar button:disabled,
+.shootout-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.status-note {
+  margin: 0.55rem 0 0;
+  font-size: 0.76rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  background: #e5efe9;
+  color: #19382e;
+}
+.status-warn {
+  background: #f3e1d7;
+  color: #84241f;
+}
+.env-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 0.6rem 0.75rem;
+  margin-top: 0.55rem;
+}
+.env-grid label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.74rem;
+}
+#hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+.hud-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  background: #102e29;
+  color: #e9f5ef;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+.hud-key {
+  color: #a9ccc0;
+}
+.hud-val {
+  font-weight: 600;
+  color: #ffffff;
+}
+#shootout-panel {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid #c9cec4;
+  border-radius: 6px;
+  background: #fffef8;
+}
+.shootout-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+.shootout-config {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1rem;
+  margin: 0.7rem 0;
+}
+.shootout-config label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.74rem;
+}
+.shootout-config .cep-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.35rem;
+}
+.shootout-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  margin: 0.65rem 0;
+  font-size: 0.74rem;
+}
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.shootout-progress-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.76rem;
+}
+.cep-legend[data-cep-rendered='true'] {
+  color: #175c48;
+  font-weight: 600;
+}
+#shootout-error {
+  color: #84241f;
+  background: #f3e1d7;
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+.shootout-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.78rem;
+}
+.shootout-table th,
+.shootout-table td {
+  padding: 0.55rem 0.5rem;
+  border-bottom: 1px solid #c9cec4;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .sim-panel-grid {
+    grid-template-columns: 1fr;
+  }
+}

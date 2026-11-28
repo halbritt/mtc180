@@ -1,17 +1,25 @@
 import {
+  AmbientLight,
   Box3,
   BufferGeometry,
   Color,
+  CylinderGeometry,
+  DirectionalLight,
   Float32BufferAttribute,
   GridHelper,
   Group,
+  HemisphereLight,
+  Line,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   OrthographicCamera,
   PlaneGeometry,
   Points,
   PointsMaterial,
+  RingGeometry,
   Scene,
+  SphereGeometry,
   Vector3,
   WebGLRenderer,
 } from 'three'
@@ -23,8 +31,17 @@ import {
 import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
+import { createLauncherRig, type LauncherRig } from './launcher_mesh'
+import type { AdjustmentValues, LauncherModel } from './models'
+import type { MonteCarloDesignSummary } from './physics/montecarlo'
 import type { PracticeTarget } from './physics/practice'
 import type { Sample, Target } from './physics/telemetry'
+
+export interface ArmFrame {
+  t: number
+  psiDeg: number
+  thDeg: number
+}
 
 type View = 'orbit' | 'side' | 'overhead' | 'downrange'
 const directions: Record<View, Vector3> = {
@@ -140,7 +157,8 @@ function disposeContents(group: Group) {
     if (
       obj instanceof Mesh ||
       obj instanceof Points ||
-      obj instanceof GridHelper
+      obj instanceof GridHelper ||
+      obj instanceof Line
     ) {
       obj.geometry.dispose()
       const materials = Array.isArray(obj.material)
@@ -150,6 +168,129 @@ function disposeContents(group: Group) {
     }
   })
   group.clear()
+}
+
+function drawDivotMarker(group: Group, pos: Vector3) {
+  const ringGeo = new RingGeometry(0.035, 0.065, 24)
+  const ringMat = new MeshBasicMaterial({
+    color: carryColor,
+    transparent: true,
+    opacity: 0.75,
+    depthWrite: false,
+  })
+  const ring = new Mesh(ringGeo, ringMat)
+  ring.rotation.x = -Math.PI / 2
+  ring.position.set(pos.x, 0.002, pos.z)
+  group.add(ring)
+}
+
+function drawRestFlag(group: Group, pos: Vector3) {
+  const pole = new Mesh(
+    new CylinderGeometry(0.005, 0.005, 0.24, 8),
+    new MeshStandardMaterial({ color: 0xf4e3b2, roughness: 0.4 })
+  )
+  pole.position.set(pos.x, 0.12, pos.z)
+  group.add(pole)
+
+  const flag = new Mesh(
+    new PlaneGeometry(0.09, 0.055),
+    new MeshBasicMaterial({ color: 0xffbc6b, side: 2 })
+  )
+  flag.position.set(pos.x + 0.045, 0.21, pos.z)
+  group.add(flag)
+}
+
+function drawTargetZoneRing(group: Group, center: Vector3, radiusM = 0.5) {
+  const ring = new Mesh(
+    new RingGeometry(Math.max(0.02, radiusM - 0.025), radiusM, 48),
+    new MeshBasicMaterial({
+      color: 0xa6c7ff,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+    })
+  )
+  ring.rotation.x = -Math.PI / 2
+  ring.position.set(center.x, 0.002, center.z)
+  group.add(ring)
+}
+
+const CEP_PALETTE = [0x7ce8ff, 0xffd166, 0xff7eb6, 0xa8ff78, 0xc3a6ff] as const
+const CEP_CSS_PALETTE = ['#8ceeff', '#ffe082', '#ff9ec7', '#bfff99', '#d4bfff'] as const
+
+function drawCepEllipse(
+  group: Group,
+  summary: MonteCarloDesignSummary,
+  origin: Target,
+  colorIdx: number,
+  displayName: string,
+  bounds: Box3
+) {
+  const { centerX, centerY, semiMajorM, semiMinorM, angleRad } = summary.cep95Ellipse
+  if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return
+  const color = CEP_PALETTE[colorIdx % CEP_PALETTE.length]
+  const cssColor = CEP_CSS_PALETTE[colorIdx % CEP_CSS_PALETTE.length]
+
+  const a = Math.max(0.03, semiMajorM)
+  const b = Math.max(0.03, semiMinorM)
+  const cosA = Math.cos(angleRad)
+  const sinA = Math.sin(angleRad)
+  const cx = centerX - origin.x
+  const cz = origin.y - centerY
+
+  const outline: Vector3[] = Array.from({ length: 64 }, (_, i) => {
+    const t = (2 * Math.PI * i) / 64
+    const u = a * Math.cos(t)
+    const v = b * Math.sin(t)
+    const dx = u * cosA - v * sinA
+    const dy = u * sinA + v * cosA
+    const pt = new Vector3(cx + dx, 0.004, cz - dy)
+    bounds.expandByPoint(pt)
+    return pt
+  })
+
+  const fillGeo = new BufferGeometry().setFromPoints(outline)
+  const tris: number[] = []
+  for (let i = 1; i < outline.length - 1; i++) tris.push(0, i, i + 1)
+  fillGeo.setIndex(tris)
+  const fillMat = new MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  })
+  group.add(new Mesh(fillGeo, fillMat))
+  ribbon(group, [...outline, outline[0]], color, 2.5)
+
+  const centerPt = new Vector3(cx, 0.005, cz)
+  bounds.expandByPoint(centerPt)
+  dot(group, centerPt, color, 6)
+
+  if (summary.landings.length > 0) {
+    const pts = summary.landings.map(
+      (l) => new Vector3(l.restX - origin.x, 0.003, origin.y - l.restY)
+    )
+    const scatterGeo = new BufferGeometry().setFromPoints(pts)
+    const scatterMat = new PointsMaterial({
+      color,
+      size: 3,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.55,
+      depthTest: false,
+    })
+    group.add(new Points(scatterGeo, scatterMat))
+  }
+
+  return label(
+    group,
+    centerPt,
+    `95% CEP · ${displayName} (${semiMajorM.toFixed(2)}×${semiMinorM.toFixed(2)} m)`,
+    cssColor
+  )
 }
 
 function drawGround(group: Group, bounds: Box3) {
@@ -226,7 +367,10 @@ function drawFootprint(group: Group, practice: PracticeTarget, bounds: Box3) {
 }
 
 export function createField(host: HTMLElement) {
-  const renderer = new WebGLRenderer({ antialias: true })
+  const renderer = new WebGLRenderer({
+    antialias: true,
+    preserveDrawingBuffer: true,
+  })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   const overlay = new CSS2DRenderer()
   for (const el of [renderer.domElement, overlay.domElement]) {
@@ -246,6 +390,12 @@ export function createField(host: HTMLElement) {
 
   const scene = new Scene()
   scene.background = new Color(0x183b34)
+  scene.add(new AmbientLight(0xffffff, 0.85))
+  scene.add(new HemisphereLight(0xdff5ea, 0x264b3b, 0.45))
+  const sun = new DirectionalLight(0xfff8e8, 0.95)
+  sun.position.set(2.5, 5, 3)
+  scene.add(sun)
+
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0.001, 100)
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.maxPolarAngle = Math.PI / 2
@@ -254,8 +404,24 @@ export function createField(host: HTMLElement) {
 
   const content = new Group()
   const groundAndTarget = new Group()
-  scene.add(content, groundAndTarget)
+  const launcherGroup = new Group()
+  const cepGroup = new Group()
+  const ballMesh = new Mesh(
+    new SphereGeometry(0.032, 16, 12),
+    new MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05 })
+  )
+  ballMesh.visible = false
+  ballMesh.renderOrder = 3
+  scene.add(content, groundAndTarget, launcherGroup, cepGroup, ballMesh)
+
   const traceBounds = new Box3()
+  const cepBounds = new Box3()
+  let hasCepBounds = false
+  let cepVisible = true
+  let latestCepSummaries: readonly MonteCarloDesignSummary[] = []
+  let latestModelNames: Record<string, string> = {}
+  let currentPractice: PracticeTarget | undefined
+
   let traceTarget: Vector3 | undefined
   let targetLabel: ReturnType<typeof label> | undefined
   let targetLabelIndex = 0
@@ -265,6 +431,7 @@ export function createField(host: HTMLElement) {
   let viewportWidth = 1,
     viewportHeight = 1
   const labels: ReturnType<typeof label>[] = []
+  const cepLabels: ReturnType<typeof label>[] = []
   const bounds = new Box3().setFromPoints([
     new Vector3(-1, 0, -1),
     new Vector3(1, 1, 1),
@@ -273,6 +440,11 @@ export function createField(host: HTMLElement) {
   let pending = 0
   let framedWidth = 2,
     framedHeight = 2
+
+  let launcherRig: LauncherRig | undefined
+  let activeArmFrames: readonly ArmFrame[] = []
+  let armAnimRaf = 0
+  let replaySpeed = 1
 
   function projectCursor() {
     if (!origin) return
@@ -287,13 +459,60 @@ export function createField(host: HTMLElement) {
     pending = 0
     renderer.render(scene, camera)
     overlay.render(scene, camera)
-    arrangeLabels(labels, camera, viewportWidth, viewportHeight)
+    arrangeLabels(
+      [...labels, ...cepLabels],
+      camera,
+      viewportWidth,
+      viewportHeight
+    )
     projectCursor()
   }
   function invalidate() {
     if (!pending) pending = requestAnimationFrame(render)
   }
   controls.addEventListener('change', invalidate)
+
+  function stopArmAnimation() {
+    if (armAnimRaf) {
+      cancelAnimationFrame(armAnimRaf)
+      armAnimRaf = 0
+    }
+  }
+
+  function applyArmFrameAt(progress01: number) {
+    if (!launcherRig || activeArmFrames.length === 0) return
+    const p = Math.max(0, Math.min(1, progress01))
+    const idxFloat = p * (activeArmFrames.length - 1)
+    const i0 = Math.floor(idxFloat)
+    const i1 = Math.min(activeArmFrames.length - 1, i0 + 1)
+    const frac = idxFloat - i0
+    const f0 = activeArmFrames[i0]
+    const f1 = activeArmFrames[i1]
+    const psiDeg = f0.psiDeg + (f1.psiDeg - f0.psiDeg) * frac
+    const thDeg = f0.thDeg + (f1.thDeg - f0.thDeg) * frac
+    launcherRig.setPose(psiDeg, thDeg, p)
+    invalidate()
+  }
+
+  function playArmAnimation() {
+    stopArmAnimation()
+    if (!launcherRig || activeArmFrames.length < 2) return
+    const rawDurS =
+      activeArmFrames[activeArmFrames.length - 1].t - activeArmFrames[0].t
+    const animDurMs = Math.max(320, rawDurS * 1000) / Math.max(0.1, replaySpeed)
+    const t0 = performance.now()
+    applyArmFrameAt(0)
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / animDurMs)
+      applyArmFrameAt(p)
+      if (p < 1) {
+        armAnimRaf = requestAnimationFrame(tick)
+      } else {
+        armAnimRaf = 0
+      }
+    }
+    armAnimRaf = requestAnimationFrame(tick)
+  }
 
   function resize() {
     const width = Math.max(1, host.clientWidth),
@@ -347,20 +566,46 @@ export function createField(host: HTMLElement) {
     labels.length = 0
     origin = undefined
     ball.hidden = true
+    ballMesh.visible = false
+  }
+
+  function rebuildCepGroup() {
+    disposeContents(cepGroup)
+    cepLabels.length = 0
+    cepBounds.makeEmpty()
+    hasCepBounds = false
+
+    if (!cepVisible || latestCepSummaries.length === 0) return
+    const refOrigin = origin ?? { x: 0, y: 0 }
+    for (let i = 0; i < latestCepSummaries.length; i++) {
+      const s = latestCepSummaries[i]
+      const name = latestModelNames[s.modelId] ?? s.modelId
+      const lbl = drawCepEllipse(cepGroup, s, refOrigin, i, name, cepBounds)
+      if (lbl) {
+        cepLabels.push(lbl)
+        hasCepBounds = true
+      }
+    }
   }
 
   function setCursor(point: Position) {
     if (!origin) return
     fieldPosition(point, origin, ballPosition)
+    ballMesh.position.copy(ballPosition)
+    ballMesh.visible = true
     projectCursor()
+    invalidate()
   }
 
   function setPractice(practice?: PracticeTarget) {
+    currentPractice = practice
     if (!origin) return
     disposeContents(groundAndTarget)
     if (targetLabel) labels.splice(targetLabelIndex, 1)
     targetLabel = undefined
     bounds.copy(traceBounds)
+    bounds.expandByPoint(new Vector3(-0.35, 0, -0.25))
+    bounds.expandByPoint(new Vector3(0.35, 0.35, 0.25))
     const center = practice
       ? new Vector3(practice.x, 0, -practice.y)
       : traceTarget
@@ -368,6 +613,7 @@ export function createField(host: HTMLElement) {
     if (center) {
       bounds.expandByPoint(center)
       dot(groundAndTarget, center, 0xa6c7ff, 7)
+      if (!practice) drawTargetZoneRing(groundAndTarget, center, 0.5)
       targetLabel = label(
         groundAndTarget,
         center,
@@ -375,6 +621,9 @@ export function createField(host: HTMLElement) {
         '#c3d7ff'
       )
       labels.splice(targetLabelIndex, 0, targetLabel)
+    }
+    if (hasCepBounds && cepVisible) {
+      bounds.union(cepBounds)
     }
     drawGround(groundAndTarget, bounds)
     view(activeView)
@@ -394,6 +643,8 @@ export function createField(host: HTMLElement) {
     origin = { x: start.x, y: start.y }
     const path = samples.map((point) => fieldPosition(point, start))
     ballPosition.copy(path[0])
+    ballMesh.position.copy(path[0])
+    ballMesh.visible = true
     traceTarget = target && fieldPosition({ ...target, z: 0 }, start)
     traceBounds.setFromPoints(path)
     traceBounds.expandByPoint(new Vector3(0, 0, 0))
@@ -404,9 +655,11 @@ export function createField(host: HTMLElement) {
     const last = path[path.length - 1]
     const distance = (p: Vector3) => Math.hypot(p.x, p.z).toFixed(2) + ' m'
     dot(content, last, 0xffdd9e, 8)
+    drawRestFlag(content, last)
     labels.push(label(content, last, 'Rest · ' + distance(last), '#ffe0a5'))
     if (contact >= 0) {
       dot(content, path[contact], carryColor, 7)
+      drawDivotMarker(content, path[contact])
       labels.push(
         label(
           content,
@@ -426,8 +679,85 @@ export function createField(host: HTMLElement) {
     })
     dot(content, path[0], carryColor, 5)
     labels.push(label(content, path[0], 'Release', '#ccffdf'))
+    rebuildCepGroup()
     setPractice(practice)
   }
+
+  function setLauncher(
+    model: LauncherModel,
+    adjustments: AdjustmentValues,
+    options?: {
+      releasePosM?: readonly [number, number, number]
+      armFrames?: readonly ArmFrame[]
+      animate?: boolean
+    }
+  ) {
+    stopArmAnimation()
+    if (launcherRig) {
+      launcherGroup.remove(launcherRig.group)
+      launcherRig.dispose()
+      launcherRig = undefined
+    }
+    launcherRig = createLauncherRig(model, adjustments)
+    launcherGroup.add(launcherRig.group)
+    launcherRig.setYaw(adjustments.yawDeg ?? 0)
+
+    const relPos = options?.releasePosM ?? [0.15, 0, 0.2]
+    launcherRig.setPositionFromRelease(relPos)
+
+    activeArmFrames = options?.armFrames ?? []
+    if (activeArmFrames.length > 0) {
+      if (options?.animate) {
+        playArmAnimation()
+      } else {
+        applyArmFrameAt(1)
+      }
+    } else {
+      const cockPsi =
+        model.topology === 'gravity_trebuchet'
+          ? 150
+          : model.topology === 'inclined_ramp'
+            ? (adjustments.rampAngleDeg ?? 40)
+            : 0
+      const cockTh =
+        model.topology === 'gravity_trebuchet'
+          ? -35
+          : (adjustments.cockAngleDeg ?? model.trapBank.thCockMaxDeg)
+      launcherRig.setPose(cockPsi, cockTh, 0)
+      invalidate()
+    }
+  }
+
+  function setReplaySpeed(rate: number) {
+    if (Number.isFinite(rate) && rate > 0) replaySpeed = rate
+  }
+
+  function setCepOverlays(
+    summaries: readonly MonteCarloDesignSummary[],
+    modelNames: Record<string, string> = {},
+    visible = true
+  ) {
+    latestCepSummaries = summaries
+    latestModelNames = modelNames
+    cepVisible = visible
+    rebuildCepGroup()
+    if (origin) {
+      setPractice(currentPractice)
+    } else {
+      bounds.setFromPoints([new Vector3(-1, 0, -1), new Vector3(1, 1, 1)])
+      if (hasCepBounds && cepVisible) bounds.union(cepBounds)
+      drawGround(groundAndTarget, bounds)
+      view(activeView)
+    }
+  }
+
+  function setCepVisible(visible: boolean) {
+    cepVisible = visible
+    rebuildCepGroup()
+    if (origin) setPractice(currentPractice)
+    else invalidate()
+  }
+
   const observer = new ResizeObserver(resize)
   observer.observe(host)
   view(activeView)
@@ -436,11 +766,24 @@ export function createField(host: HTMLElement) {
     view,
     setCursor,
     setPractice,
+    setLauncher,
+    setReplaySpeed,
+    playArmAnimation,
+    setCepOverlays,
+    setCepVisible,
     dispose() {
+      stopArmAnimation()
       observer.disconnect()
       controls.dispose()
       cancelAnimationFrame(pending)
       clear()
+      disposeContents(cepGroup)
+      if (launcherRig) {
+        launcherRig.dispose()
+        launcherRig = undefined
+      }
+      ballMesh.geometry.dispose()
+      ;(ballMesh.material as MeshStandardMaterial).dispose()
       ball.remove()
       renderer.dispose()
       renderer.domElement.remove()

@@ -1,16 +1,32 @@
 import { createField } from './field'
-import { mountPractice } from './practice-controls'
+import { renderTelemetryHud } from './hud'
+import { mountModelControls } from './model-controls'
+import { listLauncherModels, type AdjustmentValues, type LauncherModel } from './models'
+import { autoSight } from './physics/autosight'
 import { evaluatePractice, type PracticeTarget } from './physics/practice'
+import {
+  createNominalEnv,
+  simulateShot,
+  type FullSimulationResult,
+} from './physics/simulate'
+import { measure, type Sample, type Target } from './physics/telemetry'
+import { mountPractice } from './practice-controls'
 import { mountReplay } from './replay-controls'
 import { mountScorecard, updateScorecardTrace } from './scorecard'
-import { measure, type Sample, type Target } from './physics/telemetry'
+import { mountShootoutPanel } from './shootout-panel'
 
 const fieldHost = document.querySelector<HTMLElement>('#field')!
 const metrics = document.querySelector<HTMLDListElement>('#metrics')!
+const hud = document.querySelector<HTMLElement>('#hud')
 const source = document.querySelector<HTMLElement>('#source')!
 const errorBox = document.querySelector<HTMLElement>('#error')!
 const file = document.querySelector<HTMLInputElement>('#file')!
 const camera = document.querySelector<HTMLSelectElement>('#camera')!
+const replayPlay = document.querySelector<HTMLButtonElement>('#replay-play')!
+const replaySpeed = document.querySelector<HTMLSelectElement>('#replay-speed')!
+const simControlsHost = document.querySelector<HTMLElement>('#simulator-controls')!
+const shootoutHost = document.querySelector<HTMLElement>('#shootout-panel')!
+
 let field: ReturnType<typeof createField> | undefined
 try {
   field = createField(fieldHost)
@@ -24,53 +40,182 @@ try {
 }
 
 const loadReplay = field ? mountReplay(field.setCursor) : undefined
+replaySpeed.addEventListener('change', () => {
+  field?.setReplaySpeed(Number(replaySpeed.value))
+})
+replayPlay.addEventListener('click', () => {
+  field?.playArmAnimation()
+})
 
-type Trace = { samples: Sample[]; measurements: ReturnType<typeof measure> }
-let current: Trace | undefined
+type TraceState = {
+  samples: Sample[]
+  measurements: ReturnType<typeof measure>
+  sim?: FullSimulationResult
+  model?: LauncherModel
+  target?: Target
+}
+let current: TraceState | undefined
+let shotSeedCounter = 0
+
 const practice = mountPractice((target) => {
-  if (current) renderMeasurements(current, target)
+  if (current) {
+    renderTelemetryHud(metrics, hud, {
+      measurements: current.measurements,
+      practiceTarget: target,
+      sim: current.sim,
+      model: current.model,
+    })
+  }
   field?.setPractice(target)
 })
 
-function renderMeasurements(trace: Trace, practiceTarget?: PracticeTarget) {
-  const m = trace.measurements
-  const restError =
-    practiceTarget && evaluatePractice(trace.samples, practiceTarget, 'rest')
-  const distance = (value: number | null) =>
-    value === null ? '—' : value.toFixed(2) + ' m'
-  const readings = [
-    ['Total distance', distance(m.total)],
-    ['Carry', distance(m.carry)],
-    ['Bounce / rollout', distance(m.rollout)],
-    ['Apex altitude', distance(m.apex)],
-    [
-      'Rest (x, y)',
-      '(' + m.restX.toFixed(2) + ', ' + m.restY.toFixed(2) + ') m',
-    ],
-    [
-      'Target distance',
-      distance(
-        practiceTarget
-          ? Math.hypot(practiceTarget.x, practiceTarget.y)
-          : m.targetDistance
-      ),
-    ],
-    ['Rest radial error', distance(restError?.radialError ?? m.radialError)],
-    ['Rest lateral error', distance(restError?.dy ?? m.lateralError)],
-  ]
-  metrics.replaceChildren(
-    ...readings.map(([key, value]) => {
-      const row = document.createElement('div')
-      row.className = 'row'
-      const term = document.createElement('dt')
-      const readout = document.createElement('dd')
-      term.textContent = key
-      readout.textContent = value
-      row.append(term, readout)
-      return row
-    })
+const models = listLauncherModels()
+const modelNames: Record<string, string> = Object.fromEntries(
+  models.map((m) => [m.id, m.name])
+)
+
+function displaySimulatedShot(
+  shot: FullSimulationResult,
+  model: LauncherModel,
+  adj: AdjustmentValues,
+  animateArm: boolean,
+  target: Target,
+  trialName: string
+) {
+  const measurements = measure(shot.trace, target)
+  const traceState: TraceState = {
+    samples: shot.trace,
+    measurements,
+    sim: shot,
+    model,
+    target,
+  }
+  if (practice.active) evaluatePractice(shot.trace, practice.active, 'contact')
+  renderTelemetryHud(metrics, hud, {
+    measurements,
+    practiceTarget: practice.active,
+    sim: shot,
+    model,
+  })
+  field?.show(shot.trace, target, practice.active)
+  field?.setLauncher(model, adj, {
+    releasePosM: shot.release.posM,
+    armFrames: shot.armFrames,
+    animate: animateArm,
+  })
+  loadReplay?.(shot.trace)
+  current = traceState
+  const settingLabel = model.adjustments
+    .map((d) => `${d.id}=${adj[d.id]}`)
+    .join(', ')
+  practice.record(
+    {
+      name: trialName,
+      design: model.name,
+      setting: settingLabel,
+      samples: shot.trace,
+    },
+    false
   )
+  updateScorecardTrace(measurements.carry, measurements.total)
+  source.textContent = `${model.name} (${settingLabel})`
+  errorBox.hidden = true
 }
+
+const initialEnv = createNominalEnv({
+  energyVarianceJ: 0.05,
+  turfScatterSigmaRad: 0.01,
+})
+
+const simControls = mountModelControls({
+  host: simControlsHost,
+  models,
+  initialEnv,
+  onModelChange(model, adj) {
+    field?.setLauncher(model, adj)
+  },
+  onAdjustmentPreview(model, adj) {
+    const target = { x: simControls.getTargetDistanceM(), y: 0 }
+    const previewEnv = {
+      ...simControls.getEnv(),
+      energyVarianceJ: 0,
+      turfScatterSigmaRad: 0,
+      deterministic: true,
+    }
+    const shot = simulateShot(model, adj, previewEnv, target, 1)
+    displaySimulatedShot(
+      shot,
+      model,
+      adj,
+      false,
+      target,
+      `${model.id} preview`
+    )
+  },
+  onEnvChange() {
+    // Environment edits take effect on subsequent Launch / Auto-Sight / Shootout runs.
+  },
+  onAutoSight(model, targetDistanceM) {
+    if (!Number.isFinite(targetDistanceM) || targetDistanceM < 0) {
+      simControls.setAutoSightStatus(
+        'Target distance must be a finite non-negative number.',
+        false
+      )
+      return
+    }
+    try {
+      const res = autoSight(model, simControls.getEnv(), targetDistanceM)
+      simControls.setAdjustmentValues(res.adjustments)
+      simControls.setAutoSightStatus(res.statusMessage, res.reachable)
+      field?.setLauncher(model, res.adjustments)
+    } catch (err) {
+      simControls.setAutoSightStatus(
+        err instanceof Error ? err.message : String(err),
+        false
+      )
+    }
+  },
+  onLaunch(model, adj) {
+    shotSeedCounter++
+    const target = { x: simControls.getTargetDistanceM(), y: 0 }
+    try {
+      const shot = simulateShot(
+        model,
+        adj,
+        simControls.getEnv(),
+        target,
+        1000 + shotSeedCounter
+      )
+      displaySimulatedShot(
+        shot,
+        model,
+        adj,
+        true,
+        target,
+        `${model.id} #${shotSeedCounter}`
+      )
+    } catch (err) {
+      errorBox.textContent =
+        'Launch failed. ' + (err instanceof Error ? err.message : String(err))
+      errorBox.hidden = false
+    }
+  },
+})
+
+field?.setLauncher(simControls.getActiveModel(), simControls.getAdjustments())
+
+mountShootoutPanel({
+  host: shootoutHost,
+  models,
+  getEnv: () => simControls.getEnv(),
+  getAdjustmentsByModel: () => simControls.getAllAdjustments(),
+  onResults(summaries) {
+    field?.setCepOverlays(summaries, modelNames, true)
+  },
+  onToggleCep(visible) {
+    field?.setCepVisible(visible)
+  },
+})
 
 function display(input: unknown, name: string, example: boolean) {
   if (
@@ -92,9 +237,12 @@ function display(input: unknown, name: string, example: boolean) {
     throw new Error('Use text for the optional design and setting labels.')
   }
   const measurements = measure(samples, target)
-  const trace = { samples, measurements }
+  const trace: TraceState = { samples, measurements, target }
   if (practice.active) evaluatePractice(samples, practice.active, 'contact')
-  renderMeasurements(trace, practice.active)
+  renderTelemetryHud(metrics, hud, {
+    measurements,
+    practiceTarget: practice.active,
+  })
   field?.show(samples, target, practice.active)
   loadReplay?.(samples)
   current = trace
@@ -136,6 +284,7 @@ file.addEventListener('change', () => {
   if (selected) void load(() => selected.text(), selected.name)
   file.value = ''
 })
+
 void load(
   async () => {
     const response = await fetch(import.meta.env.BASE_URL + 'example.json')

@@ -25,6 +25,7 @@
             accept=".json,application/json"
         /></label>
       </div>
+      <section id="simulator-controls" aria-label="Launcher simulator controls"></section>
       <p id="error" role="alert" hidden></p>
       <div class="columns">
         <section class="visual" aria-label="Trajectory view">
@@ -41,6 +42,7 @@
             >
           </div>
           <div id="field"></div>
+          <div id="hud" aria-label="Telemetry summary"></div>
           <div id="replay" role="group" aria-label="Trace replay" hidden>
             <button type="button" id="replay-play">Play</button>
             <input
@@ -70,6 +72,7 @@
           <dl id="metrics"></dl>
         </aside>
       </div>
+      <section id="shootout-panel" aria-label="Monte Carlo shootout"></section>
       <details id="practice">
         <summary>Practice targets</summary>
         <p>
