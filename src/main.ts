@@ -22,7 +22,6 @@ const source = document.querySelector<HTMLElement>('#source')!
 const errorBox = document.querySelector<HTMLElement>('#error')!
 const file = document.querySelector<HTMLInputElement>('#file')!
 const camera = document.querySelector<HTMLSelectElement>('#camera')!
-const replayPlay = document.querySelector<HTMLButtonElement>('#replay-play')!
 const replaySpeed = document.querySelector<HTMLSelectElement>('#replay-speed')!
 const simControlsHost = document.querySelector<HTMLElement>('#simulator-controls')!
 const shootoutHost = document.querySelector<HTMLElement>('#shootout-panel')!
@@ -39,12 +38,14 @@ try {
   camera.disabled = true
 }
 
-const loadReplay = field ? mountReplay(field.setCursor) : undefined
+const loadReplay = field
+  ? mountReplay(field.setCursor, (playing) => {
+      if (playing) field?.playArmAnimation()
+      else field?.stopArmAnimation()
+    })
+  : undefined
 replaySpeed.addEventListener('change', () => {
   field?.setReplaySpeed(Number(replaySpeed.value))
-})
-replayPlay.addEventListener('click', () => {
-  field?.playArmAnimation()
 })
 
 type TraceState = {

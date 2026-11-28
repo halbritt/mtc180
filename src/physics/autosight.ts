@@ -174,13 +174,15 @@ export function autoSight(
     if (!shot.release.leftCradle || shot.release.reachable === false) {
       return { adj, shot, loss: 1e6 + targetDistanceM }
     }
+    const rest = shot.trace[shot.trace.length - 1]
+    const rel = shot.trace[0]
+    const dx = rest.x - rel.x
+    const dy = rest.y - rel.y
     let loss: number
     if (useRadial) {
-      const rest = shot.trace[shot.trace.length - 1]
-      const rel = shot.trace[0]
-      loss = Math.hypot(rest.x - rel.x - targetDistanceM, rest.y - rel.y)
+      loss = Math.hypot(dx - targetDistanceM, dy)
     } else {
-      loss = Math.abs(shot.totalDistanceM - targetDistanceM)
+      loss = Math.abs(dx - targetDistanceM)
     }
     if (adj.rolling === 0) loss += 1e-5
     return { adj, shot, loss }
@@ -199,7 +201,6 @@ export function autoSight(
 
   const baseWithZeroYaw = yawDef ? { ...defaults, [yawDef.id]: 0 } : { ...defaults }
   const discreteCombos = buildDiscreteCombos(discreteDefs, baseWithZeroYaw)
-  const continuousCombos = buildContinuousCombos(continuousDefs, baseWithZeroYaw)
 
   const allEvaluated: CandidateEval[] = []
   if (continuousDefs.length === 0) {
@@ -207,6 +208,7 @@ export function autoSight(
       allEvaluated.push(evalCached(c))
     }
   } else if (discreteDefs.length === 0) {
+    const continuousCombos = buildContinuousCombos(continuousDefs, baseWithZeroYaw)
     for (const c of continuousCombos) {
       const key = cleanModel.adjustments.map((d) => `${d.id}=${c[d.id]}`).join('|')
       if (seenKeys.has(key)) continue
@@ -219,8 +221,9 @@ export function autoSight(
     }
     allEvaluated.sort((a, b) => a.loss - b.loss)
     const bestDisc = allEvaluated[0].adj
+    const continuousCombos = buildContinuousCombos(continuousDefs, bestDisc)
     for (const c of continuousCombos) {
-      allEvaluated.push(evalCached({ ...bestDisc, ...c }))
+      allEvaluated.push(evalCached(c))
     }
   }
 
@@ -297,8 +300,12 @@ export function autoSight(
 
   const finalAdj = validateAndClampAdjustments(cleanModel, best.adj)
   const finalShot = simulateShot(cleanModel, finalAdj, nomEnv, target, 1)
-  const predictedDistanceM = finalShot.totalDistanceM
-  const errorM = Math.abs(predictedDistanceM - targetDistanceM)
+  const finalRest = finalShot.trace[finalShot.trace.length - 1]
+  const finalRel = finalShot.trace[0]
+  const dx = finalRest.x - finalRel.x
+  const dy = finalRest.y - finalRel.y
+  const predictedDistanceM = dx
+  const errorM = Math.hypot(dx - targetDistanceM, dy)
   const toleranceM = Math.max(0.5, 0.12 * targetDistanceM)
   const reachable =
     finalShot.release.leftCradle &&

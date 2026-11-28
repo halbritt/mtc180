@@ -204,18 +204,27 @@ export function mountShootoutPanel(opts: ShootoutPanelOptions) {
       errEl.hidden = false
       return
     }
-    const trials = Math.max(1, Math.round(trialsIn.valueAsNumber || 500))
+    const trials = Number.isFinite(trialsIn.valueAsNumber)
+      ? Math.max(1, Math.round(trialsIn.valueAsNumber))
+      : 500
     const task =
       taskSel.value === 'day2_accuracy' ? 'day2_accuracy' : 'day1_distance'
     const targetX = Number.isFinite(targetXIn.valueAsNumber)
       ? targetXIn.valueAsNumber
       : 4.0
-    const targetRadiusM = Math.max(0.05, radiusIn.valueAsNumber || 0.5)
-    const timeWindowS = Math.max(0, windowIn.valueAsNumber || 210)
+    const targetRadiusM = Number.isFinite(radiusIn.valueAsNumber)
+      ? Math.max(0.05, radiusIn.valueAsNumber)
+      : 0.5
+    const timeWindowS = Number.isFinite(windowIn.valueAsNumber)
+      ? Math.max(0, windowIn.valueAsNumber)
+      : 210
     const env = opts.getEnv()
     const envForMc: EnvConfig = {
       ...env,
-      energyVarianceJ: env.energyVarianceJ > 0 ? env.energyVarianceJ : 0.1,
+      energyVarianceJ:
+        Number.isFinite(env.energyVarianceJ) && env.energyVarianceJ >= 0
+          ? env.energyVarianceJ
+          : 0.1,
     }
 
     jobSeq++

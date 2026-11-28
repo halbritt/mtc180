@@ -3,7 +3,8 @@ import type { Sample } from './physics/telemetry'
 
 /** Attach playback to a field that can display positions from a validated trace. */
 export function mountReplay(
-  setCursor: (point: Pick<Sample, 'x' | 'y' | 'z'>) => void
+  setCursor: (point: Pick<Sample, 'x' | 'y' | 'z'>) => void,
+  onPlayToggle?: (playing: boolean) => void
 ) {
   const controls = document.querySelector<HTMLElement>('#replay')!
   const toggle = document.querySelector<HTMLButtonElement>('#replay-play')!
@@ -49,12 +50,14 @@ export function mountReplay(
     if (frame !== undefined) {
       advance(performance.now())
       stop()
+      onPlayToggle?.(false)
       return
     }
     if (elapsed >= duration) seek(0)
     lastTick = performance.now()
     toggle.textContent = 'Pause'
     frame = requestAnimationFrame(animate)
+    onPlayToggle?.(true)
   })
   time.addEventListener('input', () => {
     seek(time.valueAsNumber)

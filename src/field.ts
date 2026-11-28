@@ -744,6 +744,7 @@ export function createField(host: HTMLElement) {
     if (origin) {
       setPractice(currentPractice)
     } else {
+      disposeContents(groundAndTarget)
       bounds.setFromPoints([new Vector3(-1, 0, -1), new Vector3(1, 1, 1)])
       if (hasCepBounds && cepVisible) bounds.union(cepBounds)
       drawGround(groundAndTarget, bounds)
@@ -769,6 +770,7 @@ export function createField(host: HTMLElement) {
     setLauncher,
     setReplaySpeed,
     playArmAnimation,
+    stopArmAnimation,
     setCepOverlays,
     setCepVisible,
     dispose() {

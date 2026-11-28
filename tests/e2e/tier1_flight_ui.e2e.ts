@@ -294,10 +294,10 @@ describe('Tier 1 — F9: 3D Flight Aerodynamics', () => {
     const v51 = findModel(modelsMod, 'cord_horn')
     const adj = adjustKeys(v51, { notch: 6, stop: 42 })
 
-    const posCross = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [0, 3.0, 0], turfScatterSigmaRad: 0 }), { x: 4.8, y: 0 }, 9)
-    const negCross = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [0, -3.0, 0], turfScatterSigmaRad: 0 }), { x: 4.8, y: 0 }, 9)
-    const head = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [-3.0, 0, 0], turfScatterSigmaRad: 0 }), { x: 4.8, y: 0 }, 9)
-    const tail = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [3.0, 0, 0], turfScatterSigmaRad: 0 }), { x: 4.8, y: 0 }, 9)
+    const posCross = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [0, 3.0, 0], turfScatterSigmaRad: 0, deterministic: true }), { x: 4.8, y: 0 }, 9)
+    const negCross = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [0, -3.0, 0], turfScatterSigmaRad: 0, deterministic: true }), { x: 4.8, y: 0 }, 9)
+    const head = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [-3.0, 0, 0], turfScatterSigmaRad: 0, deterministic: true }), { x: 4.8, y: 0 }, 9)
+    const tail = simMod.simulateShot(v51, adj, createNominalEnv({ windVecMps: [3.0, 0, 0], turfScatterSigmaRad: 0, deterministic: true }), { x: 4.8, y: 0 }, 9)
 
     const contactOf = (res: any) => res.trace.find((s: any) => s.event === 'contact')!
     expect(contactOf(posCross).y).toBeGreaterThan(0.02)

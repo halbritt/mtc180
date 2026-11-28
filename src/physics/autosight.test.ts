@@ -3,6 +3,7 @@ import {
   getLauncherModel,
   LAUNCHER_MODELS,
   validateAndClampAdjustments,
+  type LauncherModel,
 } from '../models'
 import { autoSight } from './autosight'
 import { createNominalEnv, simulateShot } from './simulate'
@@ -65,5 +66,51 @@ describe('autosight — Nominal Parameter Calibration', () => {
 
     expect(() => autoSight(v51, createNominalEnv(), -1)).toThrow(RangeError)
     expect(() => autoSight(v51, createNominalEnv(), Number.NaN)).toThrow(RangeError)
+  })
+
+  it('optimizes both discrete and continuous DOFs off defaults on a hybrid model', () => {
+    const base = getLauncherModel('v41_tilted_cradle')
+    const hybrid: LauncherModel = {
+      ...base,
+      id: 'v41_hybrid_test',
+      adjustments: base.adjustments.map((def) =>
+        def.id === 'launchDeg'
+          ? {
+              ...def,
+              kind: 'discrete' as const,
+              options: [20, 42, 65],
+              min: 20,
+              max: 65,
+              defaultValue: 20,
+            }
+          : def
+      ),
+    }
+    const env = createNominalEnv({ turfScatterSigmaRad: 0 })
+    const res = autoSight(hybrid, env, 4.2)
+    expect(res.reachable).toBe(true)
+    expect(res.adjustments.launchDeg).not.toBe(20)
+    expect(res.adjustments.stopDeg).not.toBe(8.4)
+    expect(res.errorM).toBeLessThan(0.5)
+  })
+
+  it('rejects backward headwind blowback and extreme crosswind off-axis shots via signed/2D error', () => {
+    const v51 = getLauncherModel('v51_cord_horn')
+
+    const headRes = autoSight(
+      v51,
+      createNominalEnv({ windVecMps: [-45, 0, 0], turfScatterSigmaRad: 0 }),
+      3.0
+    )
+    expect(headRes.reachable).toBe(false)
+    expect(headRes.predictedDistanceM).toBeLessThan(0)
+
+    const crossRes = autoSight(
+      v51,
+      createNominalEnv({ windVecMps: [0, -22, 0], turfScatterSigmaRad: 0 }),
+      3.0
+    )
+    expect(crossRes.reachable).toBe(false)
+    expect(crossRes.errorM).toBeGreaterThan(1)
   })
 })
